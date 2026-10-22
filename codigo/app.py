@@ -1,8 +1,8 @@
 """
 =============================================================================
 PROCESAMIENTO DIGITAL DE IMÁGENES - INTELIGENCIA ARTIFICIAL
-Aplicación Web: Ecualizador de Espectro RGB y Modificación de Histogramas
-Backend: Flask (Python) | Frontend: Alpine.js + CSS Moderno + Canvas 60 FPS
+Redistribución Canónica de Histogramas RGB por Espectro
+Backend: Flask (Python) | Frontend: HTML5 Canvas + Alpine.js (60 FPS)
 =============================================================================
 """
 
@@ -151,48 +151,28 @@ def api_procesar():
         return jsonify({"error": "No hay imagen cargada"}), 400
 
     img_rgb = cv2.cvtColor(IMAGEN_ORIGINAL, cv2.COLOR_BGR2RGB)
-    modo_canal = data.get("modo_canal", "global")
 
-    canales = [img_rgb[:, :, 0], img_rgb[:, :, 1], img_rgb[:, :, 2]]
-    canales_out = []
-    nombres_canales = ["r", "g", "b"]
+    factor_r = float(data.get("redist_r", 0.0)) / 100.0
+    factor_g = float(data.get("redist_g", 0.0)) / 100.0
+    factor_b = float(data.get("redist_b", 0.0)) / 100.0
 
-    for i, c_nombre in enumerate(nombres_canales):
-        cfg = data["params_global"] if modo_canal == "global" else data.get(f"params_{c_nombre}", {})
+    c_out_r, h_orig_r, h_mod_r, exc_r = pdi.redistribuir_picos_canal(img_rgb[:, :, 0], factor_r)
+    c_out_g, h_orig_g, h_mod_g, exc_g = pdi.redistribuir_picos_canal(img_rgb[:, :, 1], factor_g)
+    c_out_b, h_orig_b, h_mod_b, exc_b = pdi.redistribuir_picos_canal(img_rgb[:, :, 2], factor_b)
 
-        modo_base = cfg.get("modo", "cdf")
-        clip = float(cfg.get("clip", 1.0))
-        cont = float(cfg.get("contraste", 1.0))
-        gamma = float(cfg.get("gamma", 1.0))
-        curva_s = float(cfg.get("curva_s", 0.0))
-        r_min = float(cfg.get("r_min", 0.0))
-        r_max = float(cfg.get("r_max", 255.0))
-        fuerza = float(cfg.get("fuerza", 1.0))
-
-        # 1. Transformación de partida (CDF, Gaussiana, Rayleigh, Negativo)
-        lut_base = pdi.calcular_lut_base(canales[i], modo=modo_base, clip_factor=clip)
-
-        # 2. Look-Up Table compuesta de redistribución (Ventana de Niveles, Contraste, Sigmoide, Gamma)
-        lut_final = pdi.generar_lut_espectro(
-            contraste=cont,
-            gamma=gamma,
-            curva_s=curva_s,
-            r_min=r_min,
-            r_max=r_max,
-            fuerza_eq=fuerza,
-            lut_modo_base=lut_base
-        )
-
-        canales_out.append(lut_final[canales[i]])
-
-    img_out_rgb = np.dstack(canales_out)
+    img_out_rgb = np.dstack([c_out_r, c_out_g, c_out_b])
     img_out_bgr = cv2.cvtColor(img_out_rgb, cv2.COLOR_RGB2BGR)
     IMAGEN_RESULTADO_ACTUAL = img_out_bgr
 
+    stats_orig = {
+        "r": {"media": round(float(np.mean(img_rgb[:, :, 0])), 1), "desv": round(float(np.std(img_rgb[:, :, 0])), 1)},
+        "g": {"media": round(float(np.mean(img_rgb[:, :, 1])), 1), "desv": round(float(np.std(img_rgb[:, :, 1])), 1)},
+        "b": {"media": round(float(np.mean(img_rgb[:, :, 2])), 1), "desv": round(float(np.std(img_rgb[:, :, 2])), 1)}
+    }
     stats_res = {
-        "r": {"media": round(float(np.mean(img_out_rgb[:, :, 0])), 1), "desv": round(float(np.std(img_out_rgb[:, :, 0])), 1)},
-        "g": {"media": round(float(np.mean(img_out_rgb[:, :, 1])), 1), "desv": round(float(np.std(img_out_rgb[:, :, 1])), 1)},
-        "b": {"media": round(float(np.mean(img_out_rgb[:, :, 2])), 1), "desv": round(float(np.std(img_out_rgb[:, :, 2])), 1)}
+        "r": {"media": round(float(np.mean(c_out_r)), 1), "desv": round(float(np.std(c_out_r)), 1)},
+        "g": {"media": round(float(np.mean(c_out_g)), 1), "desv": round(float(np.std(c_out_g)), 1)},
+        "b": {"media": round(float(np.mean(c_out_b)), 1), "desv": round(float(np.std(c_out_b)), 1)}
     }
 
     tiempo_ms = round((time.perf_counter() - t0) * 1000.0, 2)
@@ -200,7 +180,22 @@ def api_procesar():
     return jsonify({
         "success": True,
         "image_res": array_a_base64_jpg(img_out_bgr),
-        "hist_res": obtener_histogramas_rgb(img_out_rgb),
+        "hist_orig": {
+            "r": [int(x) for x in h_orig_r],
+            "g": [int(x) for x in h_orig_g],
+            "b": [int(x) for x in h_orig_b]
+        },
+        "hist_res": {
+            "r": [int(round(x)) for x in h_mod_r],
+            "g": [int(round(x)) for x in h_mod_g],
+            "b": [int(round(x)) for x in h_mod_b]
+        },
+        "exceso_px": {
+            "r": exc_r,
+            "g": exc_g,
+            "b": exc_b
+        },
+        "stats_orig": stats_orig,
         "stats_res": stats_res,
         "tiempo_ms": tiempo_ms
     })
@@ -213,7 +208,7 @@ def api_guardar_servidor():
         return jsonify({"error": "No hay imagen procesada"}), 400
     dir_resultados = os.path.join(DIR_CODIGO, "resultados")
     os.makedirs(dir_resultados, exist_ok=True)
-    nombre = "resultado_espectro_rgb.png"
+    nombre = "resultado_redistribucion_rgb.png"
     ruta_guardar = os.path.join(dir_resultados, nombre)
     cv2.imwrite(ruta_guardar, IMAGEN_RESULTADO_ACTUAL)
     return jsonify({
@@ -242,7 +237,7 @@ def abrir_navegador(puerto):
 if __name__ == "__main__":
     puerto = buscar_puerto_libre(5050)
     print("=" * 65)
-    print("  MODIFICACION Y REDISTRIBUCION DE HISTOGRAMAS RGB - FLASK (PDI)")
+    print("  REDISTRIBUCIÓN CANÓNICA DE HISTOGRAMAS RGB - FLASK (PDI)")
     print(f"  Interfaz disponible en: http://127.0.0.1:{puerto}")
     print("=" * 65)
 

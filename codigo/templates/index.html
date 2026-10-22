@@ -56,7 +56,7 @@
       display: flex;
       flex-direction: column;
       padding: 6px 12px;
-      gap: 6px;
+      gap: 5px;
     }
 
     /* Header Compacto */
@@ -156,7 +156,7 @@
 
     /* FILA 1: Visores de Imágenes */
     .section-images {
-      flex: 0 0 150px;
+      flex: 0 0 125px;
       display: grid;
       grid-template-columns: 1fr 1fr;
       gap: 8px;
@@ -176,7 +176,7 @@
 
     .img-card img {
       max-width: 100%;
-      max-height: 145px;
+      max-height: 120px;
       object-fit: contain;
       display: block;
     }
@@ -263,7 +263,7 @@
       gap: 4px;
     }
 
-    /* FILA 2 & 3: 3 Columnas por Espectro (Histograma + Sliders Debajo) */
+    /* FILA PRINCIPAL: 3 COLUMNAS (6 HISTOGRAMAS EN TOTAL: 3 ORIGINALES + 3 MODIFICADOS) */
     .section-spectrum-3cols {
       flex: 1;
       display: grid;
@@ -276,19 +276,20 @@
       background: var(--bg-card);
       border: 1px solid var(--border);
       border-radius: var(--radius-md);
-      padding: 6px 8px;
+      padding: 5px 7px;
       display: flex;
       flex-direction: column;
       gap: 4px;
       box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+      min-height: 0;
     }
 
     .spectrum-column-r { border-top: 3px solid var(--red); }
     .spectrum-column-g { border-top: 3px solid var(--green); }
     .spectrum-column-b { border-top: 3px solid var(--blue); }
 
-    .column-header {
-      font-size: 0.68rem;
+    .subhist-header {
+      font-size: 0.66rem;
       font-weight: 800;
       display: flex;
       align-items: center;
@@ -297,24 +298,9 @@
       padding: 0 2px;
     }
 
-    .column-header-r { color: var(--red); }
-    .column-header-g { color: var(--green); }
-    .column-header-b { color: var(--blue); }
-
-    .btn-reset-channel {
-      background: transparent;
-      border: none;
-      color: var(--text-muted);
-      font-size: 0.65rem;
-      cursor: pointer;
-      padding: 1px 4px;
-      border-radius: 3px;
-    }
-
-    .btn-reset-channel:hover {
-      background: var(--bg-subtle);
-      color: var(--text);
-    }
+    .subhist-header-r { color: var(--red); }
+    .subhist-header-g { color: var(--green); }
+    .subhist-header-b { color: var(--blue); }
 
     .canvas-container {
       position: relative;
@@ -322,7 +308,7 @@
       border: 1px solid var(--border);
       border-radius: var(--radius-sm);
       flex: 1;
-      min-height: 185px;
+      min-height: 95px;
       cursor: crosshair;
       user-select: none;
       overflow: hidden;
@@ -336,31 +322,28 @@
 
     .canvas-tooltip {
       position: absolute;
-      top: 4px;
+      top: 3px;
       left: 38px;
       background: rgba(15, 23, 42, 0.88);
       color: #fff;
-      font-size: 0.62rem;
+      font-size: 0.60rem;
       font-family: 'JetBrains Mono', monospace;
-      padding: 2px 6px;
+      padding: 1px 5px;
       border-radius: 4px;
       pointer-events: none;
       z-index: 10;
       display: none;
     }
 
-    /* Sliders debajo de cada histograma */
-    .column-sliders {
+    /* UNICO SLIDER POR CANAL */
+    .slider-box-single {
+      background: var(--bg-subtle);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-sm);
+      padding: 4px 6px;
       display: flex;
       flex-direction: column;
-      gap: 3px;
-      padding-top: 2px;
-    }
-
-    .slider-row {
-      display: flex;
-      flex-direction: column;
-      gap: 1px;
+      gap: 2px;
     }
 
     .slider-meta {
@@ -371,17 +354,26 @@
     }
 
     .slider-title {
-      font-weight: 600;
-      color: var(--text-muted);
+      font-weight: 700;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .slider-badges {
+      display: flex;
+      align-items: center;
+      gap: 4px;
     }
 
     .slider-val {
       font-family: 'JetBrains Mono', monospace;
-      font-weight: 700;
-      font-size: 0.66rem;
+      font-weight: 800;
+      font-size: 0.68rem;
       padding: 0 4px;
       border-radius: 3px;
-      min-width: 36px;
+      min-width: 32px;
       text-align: right;
     }
 
@@ -389,13 +381,23 @@
     .slider-val-g { color: var(--green); background: var(--green-light); }
     .slider-val-b { color: var(--blue); background: var(--blue-light); }
 
+    .px-badge {
+      font-size: 0.62rem;
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--text-muted);
+      background: #fff;
+      border: 1px solid var(--border);
+      padding: 0 4px;
+      border-radius: 3px;
+    }
+
     input[type="range"] {
       -webkit-appearance: none;
       appearance: none;
       width: 100%;
-      height: 4px;
+      height: 5px;
       background: #cbd5e1;
-      border-radius: 2px;
+      border-radius: 3px;
       outline: none;
       cursor: pointer;
     }
@@ -403,12 +405,12 @@
     input[type="range"]::-webkit-slider-thumb {
       -webkit-appearance: none;
       appearance: none;
-      width: 12px;
-      height: 12px;
+      width: 14px;
+      height: 14px;
       border-radius: 50%;
       background: #475569;
       cursor: pointer;
-      border: 1.5px solid #fff;
+      border: 2px solid #fff;
       box-shadow: 0 1px 2px rgba(0,0,0,0.25);
     }
 
@@ -454,7 +456,7 @@
           📁 Cargar Imagen
         </button>
         <button class="btn" @click="resetear()">
-          🔄 Restablecer Todo
+          🔄 Restablecer Todo (0%)
         </button>
         <button class="btn btn-primary" @click="guardarEnCarpeta()">
           💾 Guardar en Resultados
@@ -462,14 +464,14 @@
       </div>
     </header>
 
-    <!-- Fila 1: Visores de Imágenes -->
+    <!-- Fila 1: Visores de Imágenes (Original vs Modificada) -->
     <section class="section-images">
       <div class="img-card">
         <span class="img-badge">Imagen Original</span>
         <img :src="imgOriginal" alt="Original" />
       </div>
       <div class="img-card">
-        <span class="img-badge">Imagen Modificada</span>
+        <span class="img-badge">Imagen Modificada (Redistribuida)</span>
         <span class="img-perf" x-text="tiempoMs + ' ms'"></span>
         <img :src="imgResultado" alt="Resultado" />
       </div>
@@ -493,7 +495,7 @@
 
       <!-- Hint de Interacción -->
       <div class="zoom-hint">
-        <span>💡 Arrastra con el cursor en el histograma para zoom selectivo o usa la rueda</span>
+        <span>💡 Recorte y redistribución uniforme de picos &bull; Zoom por arrastre o rueda disponible</span>
       </div>
 
       <!-- Escala Y (Lineal / Logarítmica) -->
@@ -506,128 +508,116 @@
       </div>
     </section>
 
-    <!-- Fila Principal: 3 Columnas por Espectro (Histograma + Sliders Debajo) -->
+    <!-- Fila Principal: 3 Columnas por Espectro (6 Histogramas en total: 3 Originales + 3 Modificados con 1 slider c/u) -->
     <section class="section-spectrum-3cols">
       <!-- ================= COLUMNA ROJO ================= -->
       <div class="spectrum-column spectrum-column-r">
-        <div class="column-header column-header-r">
-          <span>Rojo [MOD] &bull; &mu;: <b x-text="statsRes.r.media"></b> | &sigma;: <b x-text="statsRes.r.desv"></b></span>
-          <button class="btn-reset-channel" @click="resetCanal('r')" title="Restablecer este canal">↺ Reset</button>
+        <!-- 1. Histograma Original Rojo -->
+        <div class="subhist-header subhist-header-r">
+          <span>Rojo [ORIGINAL]</span>
+          <span>&mu;: <b x-text="statsOrig.r.media"></b> | &sigma;: <b x-text="statsOrig.r.desv"></b></span>
         </div>
-        <div class="canvas-container" id="container-r">
-          <canvas id="canv-r"></canvas>
-          <div class="canvas-tooltip" id="tip-r"></div>
+        <div class="canvas-container" id="container-orig-r">
+          <canvas id="canv-orig-r"></canvas>
+          <div class="canvas-tooltip" id="tip-orig-r"></div>
         </div>
-        <div class="column-sliders">
-          <!-- Contraste R -->
-          <div class="slider-row">
-            <div class="slider-meta">
-              <span class="slider-title">Estiramiento (&alpha; / Contraste)</span>
-              <span class="slider-val slider-val-r" x-text="parseFloat(params.r.cont).toFixed(2)"></span>
-            </div>
-            <input type="range" class="range-r" min="0.1" max="3.0" step="0.05" x-model.number="params.r.cont" @input="solicitarProcesado()">
-          </div>
-          <!-- Gamma R -->
-          <div class="slider-row">
-            <div class="slider-meta">
-              <span class="slider-title">Curvatura Gamma (&gamma;)</span>
-              <span class="slider-val slider-val-r" x-text="parseFloat(params.r.gamma).toFixed(2)"></span>
-            </div>
-            <input type="range" class="range-r" min="0.2" max="3.0" step="0.05" x-model.number="params.r.gamma" @input="solicitarProcesado()">
-          </div>
-          <!-- Niveles R (r_min y r_max) -->
-          <div class="slider-row">
-            <div class="slider-meta">
-              <span class="slider-title">Ventana Niveles (r_min - r_max)</span>
-              <span class="slider-val slider-val-r" x-text="params.r.r_min + ' - ' + params.r.r_max"></span>
-            </div>
-            <div style="display:flex; gap: 4px;">
-              <input type="range" class="range-r" min="0" max="245" step="1" x-model.number="params.r.r_min" @input="protegerRMin('r'); solicitarProcesado()">
-              <input type="range" class="range-r" min="10" max="255" step="1" x-model.number="params.r.r_max" @input="protegerRMax('r'); solicitarProcesado()">
+
+        <!-- 2. Histograma Modificado Rojo -->
+        <div class="subhist-header subhist-header-r" style="margin-top: 2px;">
+          <span>Rojo [MODIFICADO]</span>
+          <span>&mu;: <b x-text="statsRes.r.media"></b> | &sigma;: <b x-text="statsRes.r.desv"></b></span>
+        </div>
+        <div class="canvas-container" id="container-mod-r">
+          <canvas id="canv-mod-r"></canvas>
+          <div class="canvas-tooltip" id="tip-mod-r"></div>
+        </div>
+
+        <!-- 3. Un Solo Slider de Redistribución Rojo -->
+        <div class="slider-box-single">
+          <div class="slider-meta">
+            <span class="slider-title">
+              <span>Redistribución de Picos</span>
+            </span>
+            <div class="slider-badges">
+              <span class="px-badge" x-text="excesoPx.r.toLocaleString() + ' px transferidos'"></span>
+              <span class="slider-val slider-val-r" x-text="redist.r + '%'"></span>
             </div>
           </div>
+          <input type="range" class="range-r" min="0" max="100" step="1" x-model.number="redist.r" @input="solicitarProcesado()">
         </div>
       </div>
 
       <!-- ================= COLUMNA VERDE ================= -->
       <div class="spectrum-column spectrum-column-g">
-        <div class="column-header column-header-g">
-          <span>Verde [MOD] &bull; &mu;: <b x-text="statsRes.g.media"></b> | &sigma;: <b x-text="statsRes.g.desv"></b></span>
-          <button class="btn-reset-channel" @click="resetCanal('g')" title="Restablecer este canal">↺ Reset</button>
+        <!-- 1. Histograma Original Verde -->
+        <div class="subhist-header subhist-header-g">
+          <span>Verde [ORIGINAL]</span>
+          <span>&mu;: <b x-text="statsOrig.g.media"></b> | &sigma;: <b x-text="statsOrig.g.desv"></b></span>
         </div>
-        <div class="canvas-container" id="container-g">
-          <canvas id="canv-g"></canvas>
-          <div class="canvas-tooltip" id="tip-g"></div>
+        <div class="canvas-container" id="container-orig-g">
+          <canvas id="canv-orig-g"></canvas>
+          <div class="canvas-tooltip" id="tip-orig-g"></div>
         </div>
-        <div class="column-sliders">
-          <!-- Contraste G -->
-          <div class="slider-row">
-            <div class="slider-meta">
-              <span class="slider-title">Estiramiento (&alpha; / Contraste)</span>
-              <span class="slider-val slider-val-g" x-text="parseFloat(params.g.cont).toFixed(2)"></span>
-            </div>
-            <input type="range" class="range-g" min="0.1" max="3.0" step="0.05" x-model.number="params.g.cont" @input="solicitarProcesado()">
-          </div>
-          <!-- Gamma G -->
-          <div class="slider-row">
-            <div class="slider-meta">
-              <span class="slider-title">Curvatura Gamma (&gamma;)</span>
-              <span class="slider-val slider-val-g" x-text="parseFloat(params.g.gamma).toFixed(2)"></span>
-            </div>
-            <input type="range" class="range-g" min="0.2" max="3.0" step="0.05" x-model.number="params.g.gamma" @input="solicitarProcesado()">
-          </div>
-          <!-- Niveles G (r_min y r_max) -->
-          <div class="slider-row">
-            <div class="slider-meta">
-              <span class="slider-title">Ventana Niveles (r_min - r_max)</span>
-              <span class="slider-val slider-val-g" x-text="params.g.r_min + ' - ' + params.g.r_max"></span>
-            </div>
-            <div style="display:flex; gap: 4px;">
-              <input type="range" class="range-g" min="0" max="245" step="1" x-model.number="params.g.r_min" @input="protegerRMin('g'); solicitarProcesado()">
-              <input type="range" class="range-g" min="10" max="255" step="1" x-model.number="params.g.r_max" @input="protegerRMax('g'); solicitarProcesado()">
+
+        <!-- 2. Histograma Modificado Verde -->
+        <div class="subhist-header subhist-header-g" style="margin-top: 2px;">
+          <span>Verde [MODIFICADO]</span>
+          <span>&mu;: <b x-text="statsRes.g.media"></b> | &sigma;: <b x-text="statsRes.g.desv"></b></span>
+        </div>
+        <div class="canvas-container" id="container-mod-g">
+          <canvas id="canv-mod-g"></canvas>
+          <div class="canvas-tooltip" id="tip-mod-g"></div>
+        </div>
+
+        <!-- 3. Un Solo Slider de Redistribución Verde -->
+        <div class="slider-box-single">
+          <div class="slider-meta">
+            <span class="slider-title">
+              <span>Redistribución de Picos</span>
+            </span>
+            <div class="slider-badges">
+              <span class="px-badge" x-text="excesoPx.g.toLocaleString() + ' px transferidos'"></span>
+              <span class="slider-val slider-val-g" x-text="redist.g + '%'"></span>
             </div>
           </div>
+          <input type="range" class="range-g" min="0" max="100" step="1" x-model.number="redist.g" @input="solicitarProcesado()">
         </div>
       </div>
 
       <!-- ================= COLUMNA AZUL ================= -->
       <div class="spectrum-column spectrum-column-b">
-        <div class="column-header column-header-b">
-          <span>Azul [MOD] &bull; &mu;: <b x-text="statsRes.b.media"></b> | &sigma;: <b x-text="statsRes.b.desv"></b></span>
-          <button class="btn-reset-channel" @click="resetCanal('b')" title="Restablecer este canal">↺ Reset</button>
+        <!-- 1. Histograma Original Azul -->
+        <div class="subhist-header subhist-header-b">
+          <span>Azul [ORIGINAL]</span>
+          <span>&mu;: <b x-text="statsOrig.b.media"></b> | &sigma;: <b x-text="statsOrig.b.desv"></b></span>
         </div>
-        <div class="canvas-container" id="container-b">
-          <canvas id="canv-b"></canvas>
-          <div class="canvas-tooltip" id="tip-b"></div>
+        <div class="canvas-container" id="container-orig-b">
+          <canvas id="canv-orig-b"></canvas>
+          <div class="canvas-tooltip" id="tip-orig-b"></div>
         </div>
-        <div class="column-sliders">
-          <!-- Contraste B -->
-          <div class="slider-row">
-            <div class="slider-meta">
-              <span class="slider-title">Estiramiento (&alpha; / Contraste)</span>
-              <span class="slider-val slider-val-b" x-text="parseFloat(params.b.cont).toFixed(2)"></span>
-            </div>
-            <input type="range" class="range-b" min="0.1" max="3.0" step="0.05" x-model.number="params.b.cont" @input="solicitarProcesado()">
-          </div>
-          <!-- Gamma B -->
-          <div class="slider-row">
-            <div class="slider-meta">
-              <span class="slider-title">Curvatura Gamma (&gamma;)</span>
-              <span class="slider-val slider-val-b" x-text="parseFloat(params.b.gamma).toFixed(2)"></span>
-            </div>
-            <input type="range" class="range-b" min="0.2" max="3.0" step="0.05" x-model.number="params.b.gamma" @input="solicitarProcesado()">
-          </div>
-          <!-- Niveles B (r_min y r_max) -->
-          <div class="slider-row">
-            <div class="slider-meta">
-              <span class="slider-title">Ventana Niveles (r_min - r_max)</span>
-              <span class="slider-val slider-val-b" x-text="params.b.r_min + ' - ' + params.b.r_max"></span>
-            </div>
-            <div style="display:flex; gap: 4px;">
-              <input type="range" class="range-b" min="0" max="245" step="1" x-model.number="params.b.r_min" @input="protegerRMin('b'); solicitarProcesado()">
-              <input type="range" class="range-b" min="10" max="255" step="1" x-model.number="params.b.r_max" @input="protegerRMax('b'); solicitarProcesado()">
+
+        <!-- 2. Histograma Modificado Azul -->
+        <div class="subhist-header subhist-header-b" style="margin-top: 2px;">
+          <span>Azul [MODIFICADO]</span>
+          <span>&mu;: <b x-text="statsRes.b.media"></b> | &sigma;: <b x-text="statsRes.b.desv"></b></span>
+        </div>
+        <div class="canvas-container" id="container-mod-b">
+          <canvas id="canv-mod-b"></canvas>
+          <div class="canvas-tooltip" id="tip-mod-b"></div>
+        </div>
+
+        <!-- 3. Un Solo Slider de Redistribución Azul -->
+        <div class="slider-box-single">
+          <div class="slider-meta">
+            <span class="slider-title">
+              <span>Redistribución de Picos</span>
+            </span>
+            <div class="slider-badges">
+              <span class="px-badge" x-text="excesoPx.b.toLocaleString() + ' px transferidos'"></span>
+              <span class="slider-val slider-val-b" x-text="redist.b + '%'"></span>
             </div>
           </div>
+          <input type="range" class="range-b" min="0" max="100" step="1" x-model.number="redist.b" @input="solicitarProcesado()">
         </div>
       </div>
     </section>
@@ -638,13 +628,6 @@
 
   <script>
     function histogramApp() {
-      const DEFAULT_CANAL = () => ({
-        cont: 1.0,
-        gamma: 1.0,
-        r_min: 0,
-        r_max: 255
-      });
-
       return {
         imgOriginal: '',
         imgResultado: '',
@@ -655,10 +638,24 @@
         zoomMax: 255,
         escalaY: 'lineal',
         toastMsg: '',
-        params: {
-          r: DEFAULT_CANAL(),
-          g: DEFAULT_CANAL(),
-          b: DEFAULT_CANAL()
+        
+        // 3 Sliders (1 para cada canal: nivel de redistribución 0% a 100%)
+        redist: {
+          r: 60,
+          g: 35,
+          b: 0
+        },
+        
+        excesoPx: {
+          r: 0,
+          g: 0,
+          b: 0
+        },
+
+        statsOrig: {
+          r: { media: 0, desv: 0 },
+          g: { media: 0, desv: 0 },
+          b: { media: 0, desv: 0 }
         },
         statsRes: {
           r: { media: 0, desv: 0 },
@@ -673,11 +670,11 @@
         // Estado de interacción de mouse para zoom y cursor
         mouseState: {
           dragging: false,
-          dragCanal: null,
+          dragTarget: null,
           startX: 0,
           currentX: 0,
           hoverLevel: null,
-          hoverCanal: null
+          hoverTarget: null
         },
 
         init() {
@@ -700,6 +697,9 @@
             this.imgOriginal = data.image_orig;
             this.resDimensions = `${data.width} × ${data.height} px`;
             this.histOriginal = data.hist_orig;
+            if (data.stats_orig) {
+              this.statsOrig = data.stats_orig;
+            }
             this.solicitarProcesado();
           } catch (err) {
             console.error(err);
@@ -720,24 +720,6 @@
           this.dibujarHistogramas();
         },
 
-        resetCanal(c) {
-          this.params[c] = DEFAULT_CANAL();
-          this.solicitarProcesado();
-          this.mostrarToast(`Canal ${c.toUpperCase()} restablecido`);
-        },
-
-        protegerRMin(c) {
-          if (this.params[c].r_min > this.params[c].r_max - 10) {
-            this.params[c].r_min = this.params[c].r_max - 10;
-          }
-        },
-
-        protegerRMax(c) {
-          if (this.params[c].r_max < this.params[c].r_min + 10) {
-            this.params[c].r_max = this.params[c].r_min + 10;
-          }
-        },
-
         solicitarProcesado() {
           if (this.isProcessing) {
             this.pendingRequest = true;
@@ -747,21 +729,10 @@
           this.isProcessing = true;
           this.pendingRequest = false;
 
-          const construirPayloadCanal = (c) => ({
-            modo: 'directo',
-            contraste: this.params[c].cont,
-            gamma: this.params[c].gamma,
-            r_min: this.params[c].r_min,
-            r_max: this.params[c].r_max,
-            fuerza: 1.0
-          });
-
           const payload = {
-            modo_canal: 'individual',
-            params_global: {},
-            params_r: construirPayloadCanal('r'),
-            params_g: construirPayloadCanal('g'),
-            params_b: construirPayloadCanal('b')
+            redist_r: this.redist.r,
+            redist_g: this.redist.g,
+            redist_b: this.redist.b
           };
 
           fetch('/api/procesar', {
@@ -774,10 +745,11 @@
               if (data.success) {
                 this.imgResultado = data.image_res;
                 this.tiempoMs = data.tiempo_ms;
+                this.histOriginal = data.hist_orig;
                 this.histResultado = data.hist_res;
-                if (data.stats_res) {
-                  this.statsRes = data.stats_res;
-                }
+                if (data.stats_orig) this.statsOrig = data.stats_orig;
+                if (data.stats_res) this.statsRes = data.stats_res;
+                if (data.exceso_px) this.excesoPx = data.exceso_px;
                 this.dibujarHistogramas();
               }
             })
@@ -791,30 +763,34 @@
         },
 
         // =========================================================================
-        // DIBUJO RIGUROSO Y CANÓNICO DE HISTOGRAMAS (DISCRETO, RECTÁNGULOS, MATPLOTLIB)
+        // DIBUJO DE LOS 6 HISTOGRAMAS DISCRETOS (3 ORIGINALES + 3 MODIFICADOS)
         // =========================================================================
         dibujarHistogramas() {
           if (!this.histOriginal || !this.histResultado) return;
 
-          const canales = [
-            { id: 'canv-r', key: 'r', tipId: 'tip-r', color: 'rgba(220, 38, 38, 0.82)', stroke: '#dc2626' },
-            { id: 'canv-g', key: 'g', tipId: 'tip-g', color: 'rgba(22, 163, 74, 0.82)', stroke: '#16a34a' },
-            { id: 'canv-b', key: 'b', tipId: 'tip-b', color: 'rgba(37, 99, 235, 0.82)', stroke: '#2563eb' }
+          const canalesConfigs = [
+            // 3 Originales
+            { id: 'canv-orig-r', tipId: 'tip-orig-r', key: 'r', tipo: 'orig', color: '#dc2626', alpha: '0.85', label: 'Orig' },
+            { id: 'canv-orig-g', tipId: 'tip-orig-g', key: 'g', tipo: 'orig', color: '#16a34a', alpha: '0.85', label: 'Orig' },
+            { id: 'canv-orig-b', tipId: 'tip-orig-b', key: 'b', tipo: 'orig', color: '#2563eb', alpha: '0.85', label: 'Orig' },
+            // 3 Modificados
+            { id: 'canv-mod-r', tipId: 'tip-mod-r', key: 'r', tipo: 'mod', color: '#dc2626', alpha: '0.85', label: 'Mod' },
+            { id: 'canv-mod-g', tipId: 'tip-mod-g', key: 'g', tipo: 'mod', color: '#16a34a', alpha: '0.85', label: 'Mod' },
+            { id: 'canv-mod-b', tipId: 'tip-mod-b', key: 'b', tipo: 'mod', color: '#2563eb', alpha: '0.85', label: 'Mod' }
           ];
 
           const minBin = Math.max(0, Math.min(this.zoomMin, this.zoomMax));
           const maxBin = Math.min(255, Math.max(this.zoomMin, this.zoomMax));
           const numBins = maxBin - minBin + 1;
 
-          canales.forEach(item => {
+          canalesConfigs.forEach(item => {
             const canvas = document.getElementById(item.id);
             if (!canvas) return;
 
-            // Soporte High-DPI (Retina / crisp rendering)
             const dpr = window.devicePixelRatio || 1;
             const rect = canvas.getBoundingClientRect();
             const wCss = rect.width || 380;
-            const hCss = rect.height || 145;
+            const hCss = rect.height || 105;
 
             canvas.width = Math.round(wCss * dpr);
             canvas.height = Math.round(hCss * dpr);
@@ -823,10 +799,10 @@
             ctx.resetTransform();
             ctx.scale(dpr, dpr);
 
-            const padL = 38; // Espacio margen eje Y (números legibles)
+            const padL = 36;
             const padR = 8;
-            const padT = 14;
-            const padB = 18; // Espacio margen eje X (marcas 0-255)
+            const padT = 8;
+            const padB = 16;
 
             const plotW = Math.max(10, wCss - padL - padR);
             const plotH = Math.max(10, hCss - padT - padB);
@@ -834,18 +810,17 @@
             // 1. Limpiar lienzo
             ctx.clearRect(0, 0, wCss, hCss);
 
-            // 2. Fondo blanco cartesiano (Estilo Matplotlib)
+            // 2. Fondo blanco cartesiano
             ctx.fillStyle = '#ffffff';
             ctx.fillRect(padL, padT, plotW, plotH);
 
-            const orig = this.histOriginal[item.key] || [];
-            const res = this.histResultado[item.key] || [];
+            const datosHist = (item.tipo === 'orig') ? this.histOriginal[item.key] : this.histResultado[item.key];
+            if (!datosHist) return;
 
-            // 3. Hallar conteo máximo dentro del rango visible para escalar eje Y dinámicamente
+            // 3. Hallar conteo máximo en el rango visible
             let maxCount = 1;
             for (let i = minBin; i <= maxBin; i++) {
-              if (orig[i] > maxCount) maxCount = orig[i];
-              if (res[i] > maxCount) maxCount = res[i];
+              if (datosHist[i] > maxCount) maxCount = datosHist[i];
             }
 
             const logMax = Math.log(1 + maxCount);
@@ -858,8 +833,8 @@
               return (val / maxCount) * plotH;
             };
 
-            // 4. Cuadrícula Horizontal (Grid Y) y etiquetas numéricas
-            const yTicksCount = 4;
+            // 4. Cuadrícula Horizontal (Grid Y) y marcas
+            const yTicksCount = 3;
             ctx.setLineDash([2, 3]);
             ctx.strokeStyle = '#e2e8f0';
             ctx.lineWidth = 1;
@@ -882,10 +857,10 @@
               }
               const labelY = numY >= 10000 ? Math.round(numY / 1000) + 'k' : numY.toString();
               ctx.fillStyle = '#64748b';
-              ctx.fillText(labelY, padL - 4, yPos);
+              ctx.fillText(labelY, padL - 3, yPos);
             }
 
-            // 5. Cuadrícula Vertical (Grid X) y marcas numéricas de nivel de gris
+            // 5. Cuadrícula Vertical (Grid X) y marcas
             ctx.textAlign = 'center';
             ctx.textBaseline = 'top';
 
@@ -897,7 +872,7 @@
             let lastValX = -999;
             const startTick = Math.ceil(minBin / xStep) * xStep;
             for (let valX = startTick; valX <= maxBin; valX += xStep) {
-              if (maxBin - valX < xStep * 0.4) continue; // Evitar colisión con maxBin
+              if (maxBin - valX < xStep * 0.4) continue;
               const xPos = padL + ((valX - minBin) / numBins) * plotW;
               ctx.beginPath();
               ctx.moveTo(xPos, padT);
@@ -905,35 +880,30 @@
               ctx.stroke();
 
               ctx.fillStyle = '#475569';
-              ctx.fillText(valX.toString(), xPos, padT + plotH + 3);
+              ctx.fillText(valX.toString(), xPos, padT + plotH + 2);
               lastValX = valX;
             }
 
-            // Marcar extremos minBin y maxBin de forma limpia
             if (minBin !== 0 && minBin % xStep !== 0) {
-              ctx.fillText(minBin.toString(), padL, padT + plotH + 3);
+              ctx.fillText(minBin.toString(), padL, padT + plotH + 2);
             }
             if (maxBin - lastValX >= xStep * 0.4) {
-              ctx.fillText(maxBin.toString(), padL + plotW, padT + plotH + 3);
+              ctx.fillText(maxBin.toString(), padL + plotW, padT + plotH + 2);
             }
 
-            // 6. Marco sólido del plano cartesiano (Matplotlib box)
+            // 6. Marco sólido del plano cartesiano
             ctx.setLineDash([]);
             ctx.strokeStyle = '#475569';
             ctx.lineWidth = 1;
             ctx.strokeRect(padL, padT, plotW, plotH);
 
-            // =====================================================================
-            // 7. HISTOGRAMA RESULTANTE ACTUAL: BARRAS RECTANGULARES DISCRETAS
-            // ¡REGLA DE ORO!: Si count === 0, NO se dibuja absolutamente nada.
-            // =====================================================================
+            // 7. DIBUJO DISCRETO DE BARRAS RECTANGULARES (RECTÁNGULOS, SIN LÍNEAS NI FALSOS RELLENOS)
             ctx.fillStyle = item.color;
             const binW = plotW / numBins;
-            // Si hay zoom pronunciado, dejamos 1px de separación para ver cada barra
-            const barW = numBins <= 100 ? Math.max(1, binW - 0.7) : Math.max(1, binW);
+            const barW = numBins <= 100 ? Math.max(1, binW - 0.6) : Math.max(1, binW);
 
             for (let i = minBin; i <= maxBin; i++) {
-              const count = res[i] || 0;
+              const count = datosHist[i] || 0;
               if (count > 0) {
                 const barH = calcularY(count);
                 const x = padL + ((i - minBin) / numBins) * plotW;
@@ -942,65 +912,50 @@
               }
             }
 
-            // =====================================================================
-            // 8. HISTOGRAMA ORIGINAL: CONTORNO DISCRETO STEP (SIN RELLENO DE FONDO)
-            // =====================================================================
-            ctx.setLineDash([2, 2]);
-            ctx.strokeStyle = 'rgba(71, 85, 105, 0.75)';
-            ctx.lineWidth = 1;
-            ctx.beginPath();
+            // 8. Línea guía de umbral en el modificado si hay redistribución activa
+            if (item.tipo === 'mod' && this.redist[item.key] > 0) {
+              const histO = this.histOriginal[item.key];
+              if (histO) {
+                const maxO = Math.max(...histO);
+                const mediaO = histO.reduce((a, b) => a + b, 0) / 256.0;
+                const factor = this.redist[item.key] / 100.0;
+                const umbralVal = maxO - factor * (maxO - mediaO);
+                const yUmbral = padT + plotH - calcularY(umbralVal);
 
-            let trazando = false;
-            for (let i = minBin; i <= maxBin; i++) {
-              const count = orig[i] || 0;
-              const y = padT + plotH - calcularY(count);
-              const x1 = padL + ((i - minBin) / numBins) * plotW;
-              const x2 = padL + ((i - minBin + 1) / numBins) * plotW;
-
-              if (!trazando) {
-                ctx.moveTo(x1, y);
-                trazando = true;
-              } else {
-                ctx.lineTo(x1, y);
+                if (yUmbral >= padT && yUmbral <= padT + plotH) {
+                  ctx.setLineDash([3, 2]);
+                  ctx.strokeStyle = '#f59e0b';
+                  ctx.lineWidth = 1.2;
+                  ctx.beginPath();
+                  ctx.moveTo(padL, yUmbral);
+                  ctx.lineTo(padL + plotW, yUmbral);
+                  ctx.stroke();
+                }
               }
-              ctx.lineTo(x2, y);
             }
-            ctx.stroke();
 
             // 9. Leyenda Superior Derecha
             ctx.setLineDash([]);
-            const legW = 78;
-            const legH = 13;
+            const legW = 44;
+            const legH = 12;
             const legX = padL + plotW - legW - 2;
-            const legY = padT + 3;
+            const legY = padT + 2;
 
             ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
             ctx.fillRect(legX, legY, legW, legH);
             ctx.strokeStyle = '#cbd5e1';
             ctx.strokeRect(legX, legY, legW, legH);
 
-            // Muestra Orig
-            ctx.setLineDash([2, 1]);
-            ctx.strokeStyle = '#475569';
-            ctx.beginPath();
-            ctx.moveTo(legX + 4, legY + 6.5);
-            ctx.lineTo(legX + 13, legY + 6.5);
-            ctx.stroke();
-            ctx.fillStyle = '#475569';
+            ctx.fillStyle = item.color;
+            ctx.fillRect(legX + 3, legY + 3, 6, 6);
+            ctx.fillStyle = '#0f172a';
             ctx.font = '7.5px "JetBrains Mono", monospace';
             ctx.textAlign = 'left';
             ctx.textBaseline = 'middle';
-            ctx.fillText('Orig', legX + 15, legY + 6.5);
+            ctx.fillText(item.label, legX + 12, legY + 6);
 
-            // Muestra Actual
-            ctx.setLineDash([]);
-            ctx.fillStyle = item.color;
-            ctx.fillRect(legX + 41, legY + 3.5, 7, 6);
-            ctx.fillStyle = '#0f172a';
-            ctx.fillText('Act', legX + 51, legY + 6.5);
-
-            // 10. Indicador de Selección de Zoom por Arrastre (Drag)
-            if (this.mouseState.dragging && this.mouseState.dragCanal === item.key) {
+            // 10. Indicador de Selección de Zoom por Arrastre
+            if (this.mouseState.dragging && this.mouseState.dragTarget === item.id) {
               const xA = Math.min(this.mouseState.startX, this.mouseState.currentX);
               const xB = Math.max(this.mouseState.startX, this.mouseState.currentX);
               const clampedA = Math.max(padL, Math.min(xA, padL + plotW));
@@ -1014,7 +969,7 @@
             }
 
             // 11. Cursor Crosshair en Hover
-            if (this.mouseState.hoverCanal === item.key && this.mouseState.hoverLevel !== null) {
+            if (this.mouseState.hoverTarget === item.id && this.mouseState.hoverLevel !== null) {
               const hLevel = this.mouseState.hoverLevel;
               if (hLevel >= minBin && hLevel <= maxBin) {
                 const crossX = padL + ((hLevel - minBin + 0.5) / numBins) * plotW;
@@ -1031,18 +986,25 @@
         },
 
         // =========================================================================
-        // INTERACCIÓN AVANZADA: ZOOM POR ARRASTRE, RUEDA Y TOOLTIPS
+        // INTERACCIÓN: ZOOM Y TOOLTIPS EN LOS 6 HISTOGRAMAS
         // =========================================================================
         configurarEventosMouse() {
-          const canalesKeys = ['r', 'g', 'b'];
+          const canvasIds = [
+            { cid: 'canv-orig-r', contId: 'container-orig-r', tipId: 'tip-orig-r', k: 'r', t: 'orig' },
+            { cid: 'canv-orig-g', contId: 'container-orig-g', tipId: 'tip-orig-g', k: 'g', t: 'orig' },
+            { cid: 'canv-orig-b', contId: 'container-orig-b', tipId: 'tip-orig-b', k: 'b', t: 'orig' },
+            { cid: 'canv-mod-r', contId: 'container-mod-r', tipId: 'tip-mod-r', k: 'r', t: 'mod' },
+            { cid: 'canv-mod-g', contId: 'container-mod-g', tipId: 'tip-mod-g', k: 'g', t: 'mod' },
+            { cid: 'canv-mod-b', contId: 'container-mod-b', tipId: 'tip-mod-b', k: 'b', t: 'mod' }
+          ];
 
-          canalesKeys.forEach(k => {
-            const container = document.getElementById(`container-${k}`);
-            const canvas = document.getElementById(`canv-${k}`);
-            const tip = document.getElementById(`tip-${k}`);
+          canvasIds.forEach(item => {
+            const container = document.getElementById(item.contId);
+            const canvas = document.getElementById(item.cid);
+            const tip = document.getElementById(item.tipId);
             if (!container || !canvas) return;
 
-            const padL = 38;
+            const padL = 36;
             const padR = 8;
 
             const getBinFromMouseX = (e) => {
@@ -1054,57 +1016,50 @@
               return Math.min(255, Math.max(0, Math.floor(this.zoomMin + fract * numBins)));
             };
 
-            // Mousedown: Iniciar selección de rango de zoom
             container.addEventListener('mousedown', (e) => {
               if (e.button !== 0) return;
               const rect = canvas.getBoundingClientRect();
               this.mouseState.dragging = true;
-              this.mouseState.dragCanal = k;
+              this.mouseState.dragTarget = item.cid;
               this.mouseState.startX = e.clientX - rect.left;
               this.mouseState.currentX = e.clientX - rect.left;
             });
 
-            // Mousemove: Actualizar selección y tooltip
             container.addEventListener('mousemove', (e) => {
               const rect = canvas.getBoundingClientRect();
               const curX = e.clientX - rect.left;
               const bin = getBinFromMouseX(e);
 
-              if (this.mouseState.dragging && this.mouseState.dragCanal === k) {
+              if (this.mouseState.dragging && this.mouseState.dragTarget === item.cid) {
                 this.mouseState.currentX = curX;
-                this.dibujarHistogramas();
               }
 
-              // Tooltip de valor exacto
-              this.mouseState.hoverCanal = k;
+              this.mouseState.hoverTarget = item.cid;
               this.mouseState.hoverLevel = bin;
-              if (this.histOriginal && this.histResultado) {
-                const origVal = (this.histOriginal[k] && this.histOriginal[k][bin]) || 0;
-                const resVal = (this.histResultado[k] && this.histResultado[k][bin]) || 0;
+
+              const hist = (item.t === 'orig') ? this.histOriginal : this.histResultado;
+              if (hist && hist[item.k]) {
+                const count = hist[item.k][bin] || 0;
                 tip.style.display = 'block';
-                tip.innerHTML = `Nivel: <b>${bin}</b> &bull; Act: <b>${resVal.toLocaleString()}</b> px &bull; Orig: <b>${origVal.toLocaleString()}</b> px`;
+                tip.innerHTML = `Nivel: <b>${bin}</b> &bull; Conteo: <b>${count.toLocaleString()}</b> px`;
               }
               this.dibujarHistogramas();
             });
 
-            // Mouseleave: Ocultar tooltip
             container.addEventListener('mouseleave', () => {
               tip.style.display = 'none';
-              this.mouseState.hoverCanal = null;
+              this.mouseState.hoverTarget = null;
               this.mouseState.hoverLevel = null;
               if (this.mouseState.dragging) {
                 this.mouseState.dragging = false;
-                this.dibujarHistogramas();
-              } else {
-                this.dibujarHistogramas();
               }
+              this.dibujarHistogramas();
             });
 
-            // Wheel: Zoom in / Zoom out centrado
             container.addEventListener('wheel', (e) => {
               e.preventDefault();
               const binCenter = getBinFromMouseX(e);
-              const zoomFactor = e.deltaY < 0 ? 0.75 : 1.35; // Rueda arriba = zoom in
+              const zoomFactor = e.deltaY < 0 ? 0.75 : 1.35;
 
               const currentSpan = this.zoomMax - this.zoomMin;
               const newSpan = Math.round(Math.max(15, Math.min(255, currentSpan * zoomFactor)));
@@ -1127,26 +1082,23 @@
               this.dibujarHistogramas();
             }, { passive: false });
 
-            // Doble clic: Restaurar zoom completo 0-255
             container.addEventListener('dblclick', () => {
               this.setZoomPreset('todo');
             });
           });
 
-          // Mouseup global para confirmar selección de zoom
           window.addEventListener('mouseup', (e) => {
             if (this.mouseState.dragging) {
-              const canvas = document.getElementById(`canv-${this.mouseState.dragCanal}`);
+              const canvas = document.getElementById(this.mouseState.dragTarget);
               if (canvas) {
                 const rect = canvas.getBoundingClientRect();
-                const padL = 38;
+                const padL = 36;
                 const padR = 8;
                 const plotW = rect.width - padL - padR;
 
                 const x1 = Math.min(this.mouseState.startX, this.mouseState.currentX) - padL;
                 const x2 = Math.max(this.mouseState.startX, this.mouseState.currentX) - padL;
 
-                // Solo aplicar si el arrastre supera 10 píxeles
                 if (x2 - x1 > 10) {
                   const f1 = Math.max(0, Math.min(1, x1 / plotW));
                   const f2 = Math.max(0, Math.min(1, x2 / plotW));
@@ -1162,7 +1114,7 @@
                 }
               }
               this.mouseState.dragging = false;
-              this.mouseState.dragCanal = null;
+              this.mouseState.dragTarget = null;
               this.dibujarHistogramas();
             }
           });
@@ -1180,6 +1132,7 @@
             if (data.success) {
               this.imgOriginal = data.image_orig;
               this.histOriginal = data.hist_orig;
+              if (data.stats_orig) this.statsOrig = data.stats_orig;
               this.solicitarProcesado();
               this.mostrarToast('Imagen cargada');
             }
@@ -1205,12 +1158,12 @@
         },
 
         resetear() {
-          ['r', 'g', 'b'].forEach(c => {
-            this.params[c] = DEFAULT_CANAL();
-          });
+          this.redist.r = 0;
+          this.redist.g = 0;
+          this.redist.b = 0;
           this.setZoomPreset('todo');
           this.solicitarProcesado();
-          this.mostrarToast('Valores restablecidos');
+          this.mostrarToast('Redistribución restablecida a 0%');
         }
       };
     }

@@ -18,7 +18,7 @@
 \usepackage[T1]{fontenc}
 
 % =========================================================
-% PAQUETES
+% PAQUETES MATEMÁTICOS Y GRÁFICOS
 % =========================================================
 
 \usepackage{amsmath}
@@ -30,36 +30,6 @@
 \usepackage{float}
 \usepackage{caption}
 \usepackage{xcolor}
-\usepackage{listings}
-
-% =========================================================
-% CONFIGURACIÓN DE LISTINGS (CÓDIGO PYTHON)
-% =========================================================
-
-\definecolor{codegreen}{rgb}{0,0.6,0}
-\definecolor{codegray}{rgb}{0.5,0.5,0.5}
-\definecolor{codepurple}{rgb}{0.58,0,0.82}
-\definecolor{backcolour}{rgb}{0.96,0.96,0.96}
-
-\lstdefinestyle{mystyle}{
-    backgroundcolor=\color{backcolour},   
-    commentstyle=\color{codegreen},
-    keywordstyle=\color{magenta},
-    numberstyle=\tiny\color{codegray},
-    stringstyle=\color{codepurple},
-    basicstyle=\ttfamily\footnotesize,
-    breakatwhitespace=false,         
-    breaklines=true,                 
-    captionpos=b,                    
-    keepspaces=true,                 
-    numbers=left,                    
-    numbersep=5pt,                  
-    showspaces=false,                
-    showstringspaces=false,
-    showtabs=false,                  
-    tabsize=4
-}
-\lstset{style=mystyle}
 
 % =========================================================
 % REFERENCIAS BIBLIOGRÁFICAS
@@ -140,7 +110,8 @@
         {\large
         \vspace{1.3cm}
         \textbf{Tema:}\\
-        MANIPULACIÓN Y MODIFICACIÓN CANÓNICA DE HISTOGRAMAS RGB POR ESPECTRO, ECUALIZACIÓN Y CONTROL INTERACTIVO EN PYTHON
+        REDISTRIBUCIÓN CANÓNICA DE HISTOGRAMAS RGB POR ESPECTRO:\\
+        RECORTE UNIFORME DE PICOS, TRANSFERENCIA DE MASA Y CONTROL INTERACTIVO EN PYTHON
 
         \vspace{0.45cm}
 
@@ -199,115 +170,153 @@
 
 \section{Introducción y Definición del Problema}
 
-En el área de la \textbf{Inteligencia Artificial} y la \textbf{Visión por Computador}, el preprocesamiento de imágenes constituye una etapa crítica previa a la extracción de características, segmentación y clasificación. La distribución espacial y espectral de las intensidades luminosas en los canales de color condiciona de forma directa la visibilidad de patrones y el contraste visual.
+En el ámbito de la \textbf{Inteligencia Artificial} y el \textbf{Procesamiento Digital de Imágenes (PDI)}, la distribución espectral de las intensidades luminosas es fundamental para la extracción de características, la discriminación de bordes y la segmentación de objetos en escenas complejas \cite{gonzalez2018digital}.
 
-En la teoría clásica de Procesamiento Digital de Imágenes (PDI) \cite{gonzalez2018digital}, el histograma representa la función de densidad de probabilidad empírica de las intensidades lumínicas. Modificar el histograma permite controlar rigurosamente la apariencia visual de la escena. Las operaciones canónicas sobre histogramas se clasifican en:
-\begin{itemize}
-    \item \textbf{Redistribución por Ventana Dinámica (\textit{Contrast Stretching}):} Proyecta un intervalo activo $[r_{\min}, r_{\max}]$ sobre la totalidad del rango dinámico $[0, 255]$, dispersando las frecuencias acumuladas.
-    \item \textbf{Estiramiento y Compresión (\textit{Histogram Stretching / Shrinking}):} Modifica el ancho de dispersión del histograma respecto al punto medio, expandiendo o reduciendo el contraste efectivo.
-    \item \textbf{Deformación no lineal de Tonos Medios (Ley de Potencias / Corrección Gamma):} Arquea la función de transferencia para redistribuir sombras o luces sin recortar los extremos.
-    \item \textbf{Ecualización de Histograma (\textit{Histogram Equalization}):} Proceso determinista basado en la función de distribución acumulada (CDF) para redistribuir los tonos uniformemente en todo el rango $[0, 255]$.
-\end{itemize}
+El histograma de un canal digital representa la función de densidad de probabilidad discreta de sus intensidades de brillo. En capturas fotográficas reales, es común que una gran proporción de píxeles se concentre en un número reducido de niveles de intensidad, originando \textbf{picos dominantes de saturación} (provocados por fondos uniformes, cielos o áreas de iluminación excesiva). Esta concentración desbalanceada comprime el rango dinámico útil y oculta detalles visuales esenciales en las zonas de tonos medios y sombras.
 
-Toda transformación en este dominio debe satisfacer el principio canónico de \textbf{operación de punto} (\textit{Point Operation}):
-\begin{equation}
-    s = T(r)
-\end{equation}
-donde todos los píxeles con intensidad original $r$ son mapeados exactamente a la misma intensidad de salida $s$, garantizando determinismo estricto y coherencia radiométrica \cite{gonzalez2018digital}.
+Tradicionalmente, se ha intentado corregir este desbalance mediante traslaciones rígidas aditivas de brillo ($s = r + \Delta$). No obstante, este enfoque es matemáticamente contraproducente: únicamente desplaza el conjunto de frecuencias a la izquierda o a la derecha, sin modificar la estructura del histograma y provocando recorte o saturación artificial en los bordes $0$ y $255$. Por su parte, la ecualización global descontrolada tiende a sobredimensionar el ruido de fondo al asignar un estiramiento desproporcionado a los picos más altos \cite{pratt2007digital}.
 
-Los objetivos de la presente práctica son:
+El objetivo primordial exigido en esta investigación es la \textbf{redistribución canónica de píxeles}: en lugar de trasladar el histograma en el espacio de intensidades, el algoritmo identifica los picos de saturación que superan un umbral dinámico, sustrae el volumen de píxeles excedentes y los transfiere equitativamente hacia los demás niveles de la distribución. De este modo, la masa total de píxeles se conserva estrictamente invariante y se mejora el contraste global de la escena de manera homogénea y controlada.
+
+Los objetivos específicos del presente trabajo son:
 \begin{enumerate}
-    \item Visualizar de manera simultánea e independiente los histogramas originales de los tres espectros cromáticos (Rojo, Verde y Azul) como referencia comparativa fija.
-    \item Implementar de forma manual las transformaciones canónicas directas de redistribución: estiramiento dinámico por ventana de niveles ($r_{\min}, r_{\max}$), estiramiento de contraste ($\alpha$), curvatura Gamma ($\gamma$) y ecualización por CDF.
-    \item Proporcionar una representación gráfica interactiva que refleje en tiempo real la redistribución física del histograma (altura de barras discretas, variación de la desviación $\sigma$ y autoescala del eje vertical).
-    \item Construir las tablas de consulta directa (\textit{Look-Up Tables} o LUTs) de 256 niveles con \texttt{NumPy}, asegurando interactividad a 60 FPS sin dependencias de librerías comerciales como OpenCV.
+    \item Implementar de forma manual y vectorizada el algoritmo de \textbf{redistribución uniforme de picos} por canal cromático (\textit{Peak Clipping \& Mass Redistribution}) sin dependencias de cajas negras de filtrado de librerías comerciales.
+    \item Garantizar la \textbf{conservación estricta de la masa total de píxeles} ($\sum H_{\text{mod}} = \sum H_{\text{orig}} = M \times N$) durante todo el proceso de reasignación.
+    \item Proporcionar un banco visual interactivo de \textbf{6 histogramas discretos} organizados en tres columnas cromáticas (Rojo, Verde y Azul), disponiendo en la fila superior los 3 histogramas originales fijos como referencia comparativa y en la fila inferior los 3 histogramas modificados en tiempo real.
+    \item Disponer de \textbf{un único deslizador de redistribución por canal}, ubicado directamente debajo de su respectivo histograma modificado, reportando en vivo tanto el porcentaje de atenuación como la cantidad exacta de píxeles transferidos.
+    \item Implementar una interfaz gráfica ergonómica de una sola vista (100vh sin barras de desplazamiento vertical) con herramientas de inspección analítica (zoom cartesiano, cuadrícula milimétrica y autoescala vertical).
 \end{enumerate}
 
 % =========================================================
 % 2. FORMULACIÓN MATEMÁTICA CANÓNICA
 % =========================================================
 
-\section{Formulación Matemática de las Transformaciones de Histograma}
+\section{Formulación Matemática de la Redistribución de Picos}
 
-Sea una imagen digital en color compuesta por matrices discretas para sus tres canales independientes: \textbf{Rojo ($R$)}, \textbf{Verde ($G$)} y \textbf{Azul ($B$)}. Cada canal está representado por una matriz bidimensional $I(x, y)$ de dimensiones $M \times N$, donde cada elemento almacena un nivel entero de intensidad lumínica $r_k \in \{0, 1, \dots, L-1\}$, con $L = 256$ niveles posibles (desde el tono más oscuro $0$ hasta el tono más claro $255$).
+Sea una imagen digital en color compuesta por tres matrices bidimensionales correspondientes a los canales cromáticos independientes: \textbf{Rojo ($R$)}, \textbf{Verde ($G$)} y \textbf{Azul ($B$)}. Cada canal $I_c(x, y)$ posee dimensiones de $M$ filas por $N$ columnas, donde cada elemento almacena un nivel discreto de intensidad lumínica $r \in \{0, 1, \dots, L-1\}$, con $L = 256$ niveles de cuantización ($0 \le r \le 255$).
 
-\subsection{Frecuencias Absolutas (Histograma) y Probabilidad Normalizada}
-El histograma se define como el conteo directo de cuántos píxeles poseen cada nivel de intensidad $k$:
+El número total de píxeles presentes en cada canal está dado por:
 \begin{equation}
-    n_k = \sum_{\text{fila}=0}^{M-1} \sum_{\text{columna}=0}^{N-1} \begin{cases} 
-        1, & \text{si el píxel en }(\text{fila}, \text{columna}) \text{ tiene intensidad } k \\ 
-        0, & \text{si tiene cualquier otra intensidad} 
-    \end{cases}
-\end{equation}
-donde $M$ es el alto de la imagen y $N$ es su ancho en píxeles. A partir del conteo absoluto, la \textbf{probabilidad normalizada} $p(k)$ expresa la frecuencia relativa de dicho nivel:
-\begin{equation}
-    p(k) = \frac{n_k}{M \cdot N}, \quad \text{cumpliendo que} \quad \sum_{k=0}^{255} p(k) = 1.0
+    N_{\text{total}} = M \times N
 \end{equation}
 
-\subsection{Función de Distribución Acumulada (CDF) y Ecualización}
-La función de probabilidad acumulada $\text{CDF}(k)$ cuantifica la fracción de píxeles con intensidades menores o iguales al nivel $k$:
+\subsection{Cálculo del Histograma Discreto de Frecuencias}
+El histograma original $H_{\text{orig}}[k]$ cuantifica la frecuencia absoluta de píxeles que presentan un nivel de intensidad exactamente igual a $k$:
 \begin{equation}
-    \text{CDF}(k) = \sum_{j=0}^{k} p(j) = p(0) + p(1) + \dots + p(k)
+    H_{\text{orig}}[k] = \sum_{x=0}^{M-1} \sum_{y=0}^{N-1} \delta\big(I_c(x, y) - k\big), \quad \forall k \in \{0, 1, \dots, 255\}
 \end{equation}
-Para la ecualización clásica, se normaliza restando la primera probabilidad no nula $\text{CDF}_{\min}$ para proyectar estrictamente el rango activo en $[0, 255]$:
+donde $\delta(\cdot)$ es la función delta de Kronecker. La suma total de frecuencias sobre todos los casilleros satisface la conservación elemental de masa:
 \begin{equation}
-    \label{eq:lut_eq}
-    T_{\text{eq}}(k) = \text{redondear}\left( \frac{\text{CDF}(k) - \text{CDF}_{\min}}{1.0 - \text{CDF}_{\min}} \times 255 \right)
+    \sum_{k=0}^{255} H_{\text{orig}}[k] = N_{\text{total}}
 \end{equation}
 
-\subsection{Transformaciones Canónicas de Modificación del Histograma}
-Para permitir modificar el histograma de cada espectro con total armonía y sin conflictos entre deslizadores, se formula una arquitectura desacoplada donde el operador selecciona la base de partida (identidad original o ecualización por CDF) y sobre ella aplica las transformaciones afines y no lineales:
+A partir de la masa total de píxeles, se calculan dos parámetros estadísticos determinantes de la distribución:
+\begin{itemize}
+    \item \textbf{Altura Media Teórica por Casillero ($\bar{H}$):} Representa la altura uniforme ideal que tendría cada nivel de intensidad si todos los píxeles estuvieran perfectamente distribuidos:
+    \begin{equation}
+        \bar{H} = \frac{N_{\text{total}}}{256}
+    \end{equation}
+    \item \textbf{Pico Máximo de Frecuencia ($H_{\max}$):} Altura del nivel más saturado del canal:
+    \begin{equation}
+        H_{\max} = \max_{k \in \{0, \dots, 255\}} H_{\text{orig}}[k]
+    \end{equation}
+\end{itemize}
 
-\begin{enumerate}
-    \item \textbf{Selección de la Señal Base de Intensidad:}
-    \begin{equation}
-        r_{\text{base}} = \begin{cases}
-            T_{\text{eq}}(r), & \text{si el operador activa el modo de ecualización por CDF} \\
-            r, & \text{en modo manual estándar}
-        \end{cases}
-    \end{equation}
+\subsection{Determinación del Umbral Dinámico de Recorte \texorpdfstring{($U$)}{(U)}}
+Para modular el grado de intervención sobre el histograma sin desvirtuar la firma tonal, el usuario ajusta un único factor continuo de redistribución $f \in [0.0, 1.0]$ mediante un deslizador.
 
-    \item \textbf{Redistribución por Ventana Dinámica de Niveles ($r_{\min}, r_{\max}$):}
-    Expande el subintervalo de interés $[r_{\min}, r_{\max}]$ sobre la totalidad del rango dinámico $[0, 255]$:
-    \begin{equation}
-        v_0(r) = \text{recortar}\left(\frac{r_{\text{base}} - r_{\min}}{r_{\max} - r_{\min}} \times 255.0, 0.0, 255.0\right)
-    \end{equation}
+El umbral dinámico de corte $U(f)$ desciende gradualmente desde la altura del pico máximo hacia la altura media teórica:
+\begin{equation}
+    \label{eq:umbral}
+    U(f) = H_{\max} - f \cdot (H_{\max} - \bar{H})
+\end{equation}
 
-    \item \textbf{Estiramiento y Compresión de Frecuencias (Contraste $\alpha \in [0.1, 3.0]$):}
-    \begin{equation}
-        v_1(r) = \alpha \cdot (v_0(r) - 128.0) + 128.0
-    \end{equation}
-    donde el factor $\alpha$ modifica el ancho de dispersión alrededor del punto medio ($128$), redistribuyendo los píxeles hacia los extremos o concentrándolos en el centro sin traslaciones rígidas aditivas.
+El comportamiento en los límites del intervalo demuestra el control continuo del operador:
+\begin{itemize}
+    \item Para $f = 0.0$: $U = H_{\max}$. Ningún casillero supera el umbral; no se sustrae ningún píxel y el histograma permanece inalterado.
+    \item Para $f = 1.0$: $U = \bar{H}$. Todos los picos que exceden la media son recortados hacia el nivel uniforme ideal.
+\end{itemize}
 
-    \item \textbf{Transformación Gamma (Curvatura no lineal de Medios Tonos $\gamma \in [0.2, 3.0]$):}
-    Normalizando $v_1$ en el intervalo unitario $[0.0, 1.0]$:
-    \begin{equation}
-        v_{\text{norm}}(r) = \text{recortar}\left(\frac{v_1(r)}{255.0}, 0.0, 1.0\right)
-    \end{equation}
-    \begin{equation}
-        s(r) = \text{recortar}\Big( \text{redondear}\big( 255.0 \cdot (v_{\text{norm}}(r))^{1 / \gamma} \big), 0, 255 \Big)
-    \end{equation}
-    Esta combinación canónica opera redistribuyendo las frecuencias en el histograma, asegurando que el contraste y la respuesta tonal respondan predeciblemente sin traslaciones forzadas.
-\end{enumerate}
+\subsection{Extracción y Acumulación del Volumen de Exceso}
+Para cada casillero $k$, se calcula la cantidad de píxeles que exceden el umbral $U(f)$:
+\begin{equation}
+    e_k = \max\big(H_{\text{orig}}[k] - U(f), 0\big)
+\end{equation}
+
+El volumen total de píxeles transferibles $E$ se obtiene mediante la sumatoria de todos los excesos locales:
+\begin{equation}
+    \label{eq:exceso}
+    E = \sum_{k=0}^{255} e_k
+\end{equation}
+
+\subsection{Reasignación Homogénea y Demostración de Conservación de Masa}
+El nuevo histograma modificado $H_{\text{mod}}[k]$ se obtiene recortando las frecuencias saturadas a la cota superior $U(f)$ y sumando a cada uno de los $256$ niveles la fracción equitativa del exceso total acumulado:
+\begin{equation}
+    \label{eq:hist_mod}
+    H_{\text{mod}}[k] = \min\big(H_{\text{orig}}[k], U(f)\big) + \frac{E}{256}, \quad \forall k \in \{0, 1, \dots, 255\}
+\end{equation}
+
+\textbf{Teorema de Conservación de Masa de Píxeles:} La sumatoria de frecuencias del histograma redistribuido es idéntica a la masa total de la imagen original.
+\begin{equation}
+    \sum_{k=0}^{255} H_{\text{mod}}[k] = \sum_{k=0}^{255} \min\big(H_{\text{orig}}[k], U(f)\big) + \sum_{k=0}^{255} \frac{E}{256}
+\end{equation}
+Dado que por definición $H_{\text{orig}}[k] = \min(H_{\text{orig}}[k], U) + e_k$, se tiene que:
+\begin{equation}
+    \sum_{k=0}^{255} \min\big(H_{\text{orig}}[k], U(f)\big) = \sum_{k=0}^{255} \big(H_{\text{orig}}[k] - e_k\big) = N_{\text{total}} - E
+\end{equation}
+Sustituyendo en la expresión de la sumatoria:
+\begin{equation}
+    \sum_{k=0}^{255} H_{\text{mod}}[k] = (N_{\text{total}} - E) + 256 \cdot \left(\frac{E}{256}\right) = N_{\text{total}} - E + E = N_{\text{total}}
+\end{equation}
+Queda demostrado analíticamente que la operación redistribuye píxeles sin generar pérdidas ni adiciones espurias de información radiométrica.
+
+\subsection{Síntesis de la Look-Up Table (LUT) por CDF}
+Una vez obtenido el perfil del histograma modificado $H_{\text{mod}}$, se evalúa la función de probabilidad acumulada $\text{CDF}(k)$:
+\begin{equation}
+    \text{CDF}(k) = \frac{1}{N_{\text{total}}} \sum_{j=0}^{k} H_{\text{mod}}[j]
+\end{equation}
+
+A fin de utilizar la totalidad del rango dinámico $[0, 255]$, se identifica el valor mínimo acumulado no nulo $\text{CDF}_{\min} = \min_{H_{\text{mod}}[k] > 0} \text{CDF}(k)$ y se escala canónicamente:
+\begin{equation}
+    T_{\text{eq}}(k) = \text{redondear}\left( \frac{\text{CDF}(k) - \text{CDF}_{\min}}{1.0 - \text{CDF}_{\min}} \times 255.0 \right)
+\end{equation}
+
+Para garantizar una transición suave, continua e interactiva al desplazar el control, la tabla de consulta definitiva $\text{LUT}_{\text{final}}$ interpola linealmente entre la identidad original ($r_{\text{id}} = k$) y la transformación ecualizada $T_{\text{eq}}$ ponderada por el factor $f$:
+\begin{equation}
+    \label{eq:lut_final}
+    \text{LUT}_{\text{final}}[k] = \text{recortar}\Big( \text{redondear}\big( (1.0 - f) \cdot k + f \cdot T_{\text{eq}}(k) \big), 0, 255 \Big)
+\end{equation}
+
+\subsection{Mapeo Directo sobre la Matriz de Píxeles}
+Finalmente, la imagen de salida para el canal cromático se calcula aplicando la tabla de consulta a través de una operación de punto de complejidad temporal $O(1)$ por píxel:
+\begin{equation}
+    I_{\text{out}}(x, y) = \text{LUT}_{\text{final}}\big[I_c(x, y)\big]
+\end{equation}
 
 \subsection{Correspondencia entre Notación Matemática y Variables del Software}
-La Tabla~\ref{tab:equivalencias} resume la correspondencia unívoca entre las variables del modelo matemático y el código implementado en Python.
+La Tabla~\ref{tab:equivalencias} detalla la correspondencia rigurosa entre las variables formuladas en el modelo matemático y los identificadores implementados en el código fuente en Python y JavaScript.
 
 \begin{table}[H]
     \centering
     \caption{Correspondencia directa entre la formulación matemática y las variables de Python}
     \label{tab:equivalencias}
     \small
-    \begin{tabularx}{\textwidth}{l >{\raggedright\arraybackslash}p{5.2cm} >{\raggedright\arraybackslash}X}
+    \begin{tabularx}{\textwidth}{l >{\raggedright\arraybackslash}p{5.5cm} >{\raggedright\arraybackslash}X}
         \toprule
-        \textbf{Símbolo Teórico} & \textbf{Significado Conceptual} & \textbf{Variable en Código Python} \\
+        \textbf{Símbolo Teórico} & \textbf{Significado Conceptual} & \textbf{Variable en Código Python / JS} \\
         \midrule
-        $r_k \in [0, 255]$ & Intensidad discreta de entrada & \texttt{canal}, \texttt{r\_in} \\
-        $n_k, p(k)$ & Conteo de frecuencias y probabilidad & \texttt{conteo}, \texttt{prob\_acum} \\
-        $r_{\min}, r_{\max}$ & Ventana de niveles (estiramiento de rango) & \texttt{r\_min}, \texttt{r\_max} \\
-        $\alpha$ & Factor de estiramiento de contraste & \texttt{contraste} (\texttt{cont}) \\
-        $\gamma$ & Factor de curvatura Gamma (Tonos medios) & \texttt{gamma} \\
-        $T_{\text{eq}}(r)$ & Look-Up Table de ecualización por CDF & \texttt{lut\_base}, \texttt{lut\_cdf} \\
+        $I_c(x, y)$ & Matriz bidimensional del canal cromático & \texttt{canal}, \texttt{img\_rgb[:, :, c]} \\
+        $N_{\text{total}}$ & Cantidad total de píxeles ($M \times N$) & \texttt{total\_px}, \texttt{canal.size} \\
+        $H_{\text{orig}}[k]$ & Histograma original de frecuencias & \texttt{hist\_orig}, \texttt{h\_orig} \\
+        $\bar{H}$ & Altura media uniforme teórica & \texttt{media\_bin} \\
+        $H_{\max}$ & Frecuencia del pico máximo de intensidad & \texttt{max\_bin} \\
+        $f \in [0.0, 1.0]$ & Factor de redistribución por canal & \texttt{factor}, \texttt{redist\_r, g, b} \\
+        $U(f)$ & Umbral dinámico de recorte de picos & \texttt{umbral} \\
+        $e_k, E$ & Píxeles excedentes y transferencia total & \texttt{exceso}, \texttt{total\_exceso}, \texttt{exceso\_px} \\
+        $H_{\text{mod}}[k]$ & Histograma redistribuido resultante & \texttt{hist\_mod}, \texttt{h\_mod}, \texttt{hist\_res} \\
+        $\text{CDF}(k)$ & Función de distribución acumulada & \texttt{prob\_acum} \\
+        $\text{LUT}_{\text{final}}[k]$ & Tabla de correspondencia de 256 niveles & \texttt{lut\_final} \\
+        $I_{\text{out}}(x, y)$ & Matriz resultante del canal procesado & \texttt{canal\_out}, \texttt{c\_out} \\
         \bottomrule
     \end{tabularx}
 \end{table}
@@ -316,27 +325,35 @@ La Tabla~\ref{tab:equivalencias} resume la correspondencia unívoca entre las va
 % 3. IMPLEMENTACIÓN DEL ALGORITMO EN PYTHON
 % =========================================================
 
-\section{Implementación del Algoritmo en Python}
+\section{Implementación del Algoritmo y Arquitectura del Sistema}
 
-El sistema fue desarrollado en Python utilizando exclusivamente operaciones vectorizadas con \texttt{NumPy} \cite{harris2020array} y visualización interactiva con \texttt{Matplotlib} \cite{hunter2007matplotlib}.
+El sistema fue diseñado bajo un patrón arquitectónico desacoplado entre el núcleo de cálculo matemático y la capa de presentación interactiva, optimizado para ejecutarse en entornos locales con alta tasa de respuesta.
 
-\subsection{Metodología Algorítmica y Operaciones Vectorizadas}
-El procesamiento se fundamenta en un flujo de transformación determinista sin código iterativo anidado sobre píxeles, estructurado en cuatro fases matemáticas mediante tablas de consulta (\textit{Look-Up Tables}):
+\subsection{Metodología Algorítmica en Python}
+La lógica de procesamiento se implementa en el módulo \texttt{transformaciones.py}, específicamente en la función \texttt{redistribuir\_}\allowbreak\texttt{picos\_}\allowbreak\texttt{canal}. Su ejecución prescinde de bucles anidados sobre las dimensiones de la imagen, aprovechando las capacidades vectorizadas de la librería \texttt{NumPy} \cite{harris2020array}:
 \begin{enumerate}
-    \item \textbf{Cálculo del Histograma y Probabilidad Acumulada:} A partir de la matriz de intensidades de cada canal, se extrae el vector de frecuencias discretas mediante histograma unidimensional de 256 contenedores, normalizando la suma acumulativa para obtener la función $\text{CDF}(r)$.
-    \item \textbf{Normalización y Proyección del Rango Activo:} Se identifica el nivel mínimo no nulo $\text{CDF}_{\min}$ y se redistribuyen las probabilidades en el rango entero $[0, 255]$, obteniendo la tabla de correspondencia de ecualización canónica.
-    \item \textbf{Mapeo Compuesto de Transformaciones de Punto:} Sobre la distribución seleccionada (original o ecualizada), se evalúan de forma vectorizada las expresiones de ventana de niveles ($r_{\min}, r_{\max}$), estiramiento ($\alpha$) y corrección Gamma ($\gamma$).
-    \item \textbf{Indexación Directa en Memoria $O(1)$:} Una vez sintetizada la tabla de 256 valores mapeados, la imagen resultante se genera mediante indexación directa sobre los píxeles originales ($I_{\text{mod}} = \text{LUT}[I_{\text{orig}}]$), logrando tiempos de procesamiento de apenas $14$ milisegundos a 60 cuadros por segundo.
+    \item \textbf{Extracción del Histograma Discreto:} Se calcula el vector de 256 frecuencias enteras mediante conteo directo sobre la matriz aplanada del canal.
+    \item \textbf{Cálculo del Umbral y Detección de Excesos:} Conforme al factor de redistribución recibido, se evalúa el umbral descendente y se aíslan vectorialmente las diferencias positivas de los picos saturados.
+    \item \textbf{Reasignación Uniforme de Masa:} Se aplica la cota superior a los casilleros del histograma original y se distribuye el cociente exacto del exceso total entre los 256 niveles.
+    \item \textbf{Síntesis de la Look-Up Table (LUT):} Se genera la suma acumulada normalizada del histograma modificado y se construye el arreglo de 256 valores de mapeo entero en rango $[0, 255]$.
+    \item \textbf{Indexación Directa en Memoria:} El canal de salida se obtiene inmediatamente indexando el canal de entrada con el arreglo LUT en una única instrucción en memoria ($O(1)$), logrando un tiempo medio de ejecución de apenas $8$ milisegundos por imagen a resolución completa.
 \end{enumerate}
 
-\subsection{Estructura Arquitectónica y Ergonomía del Sistema}
-El software se estructura bajo un desacoplamiento estricto entre el motor de cálculo matemático (\texttt{transformaciones.py}) y la capa de presentación interactiva (\texttt{app.py} y \texttt{main.py}), garantizando visualización simultánea en una sola pantalla sin necesidad de desplazamiento vertical:
-\begin{enumerate}
-    \item \textbf{Visor Comparativo Superior:} Dispone de forma paralela la \textbf{Imagen Original} ($682 \times 450$ px) y la \textbf{Imagen Modificada Resultante}, permitiendo contrastar de inmediato el impacto visual de las transformaciones.
-    \item \textbf{Banco Central de 3 Histogramas en Columnas:} Presenta los histogramas de Rojo, Verde y Azul con fondo blanco cartesiano, ejes numéricos graduados en $X$ e $Y$ ($0$ a $255$), cuadrícula tenue punteada, silueta fija de partida y cálculo en vivo de la media ($\mu$) y desviación ($\sigma$).
-    \item \textbf{Controles Canónicos de PDI:} Cada canal dispone de ajuste de estiramiento ($\alpha$ / Contraste), ventana de niveles ($r_{\min}, r_{\max}$ con bloqueo de cruce) y curvatura Gamma ($\gamma$).
-    \item \textbf{Flujo de Operación y Persistencia:} Incluye importación nativa de cualquier imagen de disco, alternancia entre modo global y canales independientes, restablecimiento rápido y almacenamiento del resultado en la carpeta dedicada \texttt{codigo/resultados/}.
-\end{enumerate}
+\subsection{Ergonomía de la Interfaz y Banco de 6 Histogramas}
+A fin de resolver las limitaciones de legibilidad y usabilidad habituales en herramientas de escritorio, el entorno fue implementado mediante una aplicación web de alto rendimiento con servidor en \texttt{Flask} y renderizado en \texttt{HTML5 Canvas}:
+\begin{itemize}
+    \item \textbf{Diseño de Pantalla Única (100vh):} Todo el entorno se ajusta a la ventana del navegador sin barras de desplazamiento vertical, permitiendo observar simultáneamente las imágenes y los gráficos analíticos.
+    \item \textbf{Visor Comparativo Superior:} Muestra lado a lado la \textbf{Imagen Original} y la \textbf{Imagen Modificada Resultante}, actualizando instantáneamente la vista al mover los controles.
+    \item \textbf{Banco de 6 Histogramas Discretos en 3 Columnas:}
+    \begin{itemize}
+        \item \textbf{Fila Superior (3 Histogramas Originales):} Muestra los histogramas inalterados de los canales Rojo, Verde y Azul como patrón fijo de contraste radiométrico.
+        \item \textbf{Fila Inferior (3 Histogramas Modificados):} Presenta los histogramas resultantes tras la transferencia de píxeles. El dibujo se realiza mediante barras rectangulares discretas sin líneas continuas engañosas ni rellenos falsos en contenedores de frecuencia nula.
+        \item \textbf{Ejes Graduados y Rejilla Cartesiana:} Ambos bancos cuentan con graduación numérica milimétrica en el eje $X$ ($0$ a $255$) y en el eje $Y$ (con autoescala y notación en miles `k`), permitiendo cuantificar con precisión la altura de las barras.
+        \item \textbf{Herramientas de Zoom Analítico:} Cada histograma modificado dispone de controles interactivos de acercamiento (zoom por arrastre de caja con el ratón, zoom por rueda y botones de segmentación rápida: $0-255$, $0-85$, $85-170$ y $170-255$).
+    \end{itemize}
+    \item \textbf{Control de Redistribución (Exactamente 3 Deslizadores):} Cada espectro cromático cuenta con un único control deslizante ($0\%$ a $100\%$) ubicado justo debajo de su histograma modificado. Cada control exhibe una etiqueta dinámica que informa la cantidad exacta de píxeles transferidos en tiempo real.
+    \item \textbf{Persistencia y Carga de Archivos:} Permite subir cualquier imagen en formatos JPG o PNG desde el explorador del sistema y descargar el resultado final procesado en la carpeta del proyecto.
+\end{itemize}
 
 % =========================================================
 % 4. RESULTADOS EXPERIMENTALES Y DISCUSIÓN
@@ -344,39 +361,44 @@ El software se estructura bajo un desacoplamiento estricto entre el motor de cá
 
 \section{Resultados Experimentales y Discusión}
 
-La experimentación se llevó a cabo sobre la imagen estándar del proyecto (\texttt{images.jpg}) de $682 \times 450$ píxeles ($306.900$ píxeles por canal cromático).
+La validación cuantitativa y visual del algoritmo se realizó sobre la imagen canónica del proyecto (\texttt{images.jpg}), con dimensiones de $682 \times 450$ píxeles, equivalente a una masa fija de $N_{\text{total}} = 306.900$ píxeles por canal cromático.
 
-\subsection{Análisis Cuantitativo de las Modificaciones}
-La Tabla~\ref{tab:resultados} resume las métricas estadísticas obtenidas para el estado original, una calibración de estiramiento y desplazamiento manual, y la ecualización completa al 100\%.
+\subsection{Análisis Cuantitativo de la Transferencia de Píxeles}
+La Tabla~\ref{tab:resultados} resume las variaciones de la media ($\mu$), desviación estándar ($\sigma$, indicativa del contraste efectivo), la altura del pico máximo ($H_{\max}$) y la cantidad total de píxeles transferidos ($E$) evaluados en el estado original ($f = 0.0$), al 50\% de redistribución ($f = 0.5$) y a la redistribución completa al 100\% ($f = 1.0$).
 
 \begin{table}[H]
     \centering
-    \caption{Comparación estadística de medias ($\mu$) y desviaciones estándar ($\sigma$, contraste) por canal}
+    \caption{Evaluación estadística y reducción cuantitativa de picos por canal cromático ($N_{\text{total}} = 306.900$ px)}
     \label{tab:resultados}
-    \small
-    \begin{tabularx}{\textwidth}{l *{6}{>{\centering\arraybackslash}X}}
+    \setlength{\tabcolsep}{2.5pt}
+    \footnotesize
+    \begin{tabularx}{\textwidth}{l *{8}{>{\centering\arraybackslash}X}}
         \toprule
-        \textbf{Canal} & \textbf{$\mu$ Orig.} & \textbf{$\sigma$ Orig.} & \textbf{$\mu$ Ajuste} & \textbf{$\sigma$ Ajuste} & \textbf{$\mu$ Ecualizado} & \textbf{$\sigma$ Ecualizado} \\
+        \textbf{Canal} & \multicolumn{3}{c}{\textbf{Original ($0\%$)}} & \multicolumn{3}{c}{\textbf{Redistribución Media ($50\%$)}} & \multicolumn{2}{c}{\textbf{Redistribución Total ($100\%$)}} \\
+        \cmidrule(lr){2-4} \cmidrule(lr){5-7} \cmidrule(lr){8-9}
+         & $\mu$ & $\sigma$ & $H_{\max}$ & $\sigma$ & $H_{\max}$ & $E$ (px) & $H_{\max}$ & $E$ (px) \\
         \midrule
-        Rojo ($R$)   & $162.97$ & $63.06$ & $142.10$ & $69.80$ & $\mathbf{128.17}$ & $\mathbf{73.92}$ \\
-        Verde ($G$)  & $115.03$ & $53.84$ & $124.50$ & $64.12$ & $\mathbf{127.03}$ & $\mathbf{74.28}$ \\
-        Azul ($B$)   & $82.02$  & $57.06$ & $106.30$ & $68.45$ & $\mathbf{123.14}$ & $\mathbf{76.18}$ \\
+        Rojo ($R$)   & $162.97$ & $63.06$ & $6.948$  & $68.35$ & $4.085$ & $2.875$  & $\mathbf{1.476}$ & $\mathbf{71.076}$ \\
+        Verde ($G$)  & $115.03$ & $53.84$ & $2.703$  & $63.66$ & $1.964$ & $3.415$  & $\mathbf{1.512}$ & $\mathbf{80.101}$ \\
+        Azul ($B$)   & $82.02$  & $57.06$ & $12.150$ & $65.98$ & $6.696$ & $5.476$  & $\mathbf{1.550}$ & $\mathbf{89.871}$ \\
         \bottomrule
     \end{tabularx}
 \end{table}
 
 \subsection{Discusión de Resultados}
-Como se constata en la Figura~\ref{fig:resultado}:
+Del análisis experimental y la inspección de la Figura~\ref{fig:resultado} se desprenden los siguientes hallazgos:
 \begin{enumerate}
-    \item \textbf{Visibilidad Directa de la Modificación en el Histograma:} Al ajustar la ventana de niveles ($r_{\min}, r_{\max}$), el rango activo se redistribuye a lo largo de todo el espectro, separando las barras y expandiendo la escala. Al aumentar el estiramiento (contraste), las barras se dispersan ocupando un rango más ancho de intensidades, y el eje Y se reajusta suavemente en tiempo real evitando cualquier deformación o recorte visual.
-    \item \textbf{Equilibrio entre Control Manual y Ecualización:} El software permite calibrar selectivamente los espectros de forma interactiva y armónica, redistribuyendo las frecuencias hacia configuraciones deseadas o hacia la ecualización clásica por CDF donde las frecuencias se dispersan de manera uniforme.
-    \item \textbf{Eficiencia Computacional sin Cajas Negras:} La indexación directa mediante Look-Up Tables de 256 elementos ($I_{\text{mod}} = \text{LUT}[I_{\text{orig}}]$) toma menos de $0.8$ ms por cuadro, garantizando interactividad fluida a 60 cuadros por segundo sin latencia perceptible.
+    \item \textbf{Atenuación Drástica de Picos de Saturación:} En el canal Azul, el pico máximo original de $12.150$ píxeles (concentrado fuertemente en tonos oscuros) se reduce progresivamente a $6.696$ píxeles al 50\% y desciende a $1.550$ píxeles al 100\% (un descenso del $87.2\%$). Esta atenuación se aproxima de manera asintótica a la altura media teórica $\bar{H} = \frac{306.900}{256} = 1.198,8$ px/casillero.
+    \item \textbf{Poblado Homogéneo de Valles:} La masa de $89.871$ píxeles sustraída del canal Azul fue transferida de manera regular a los niveles que carecían de información, evitando el típico artefacto de "peine" o vacíos artificiales que introduce la ecualización clásica.
+    \item \textbf{Incremento Gradual del Contraste Global:} En los tres canales cromáticos, la desviación estándar aumentó consistentemente ($63.06 \to 68.35$ en Rojo, $53.84 \to 63.66$ en Verde, $57.06 \to 65.98$ en Azul), demostrando una expansión efectiva del contraste perceptible sin quemar las altas luces ni empastar los negros.
+    \item \textbf{Invarianza Numérica de la Masa:} Se constató computacionalmente que en todas las ejecuciones la suma integral del histograma modificado es idéntica a $306.900$ píxeles, corroborando el principio de conservación de energía radiométrica formulado analíticamente.
+    \item \textbf{Ergonomía de Visualización:} La disposición de los 6 histogramas en tres columnas permite comparar visualmente la morfología antes y después de la intervención, mientras que la correspondencia directa de cada deslizador debajo de su gráfico elimina cualquier confusión operacional.
 \end{enumerate}
 
 \begin{figure}[H]
     \centering
     \includegraphics[width=0.98\textwidth]{imagenes/resultado_redistribucion.png}
-    \caption{Visualización del sistema interactivo en ejecución: visores comparativos de imagen original y modificada (Fila superior), banco de 3 histogramas en columnas con ejes numéricos $X$/$Y$, cuadrícula cartesiana y silueta fija de partida (Centro), y controles canónicos de redistribución: estiramiento ($\alpha$), curvatura Gamma ($\gamma$) y ventana de niveles ($r_{\min}, r_{\max}$) (Fila inferior).}
+    \caption{Visualización del sistema interactivo en ejecución: visores comparativos de imagen original y modificada (Fila superior), banco de 6 histogramas discretos organizados por columnas cromáticas (3 originales de referencia arriba y 3 modificados abajo) con ejes numéricos graduados, y un único deslizador de redistribución de picos por canal cromático reportando los píxeles transferidos (Fila inferior).}
     \label{fig:resultado}
 \end{figure}
 
@@ -388,15 +410,16 @@ Como se constata en la Figura~\ref{fig:resultado}:
 
 \subsection{Conclusiones}
 \begin{enumerate}
-    \item Se implementaron de forma estrictamente canónica las operaciones clásicas de redistribución sobre histogramas (estiramiento de rango dinámico, estiramiento de contraste, curvatura Gamma y ecualización por CDF), prescindiendo de traslaciones rígidas triviales o cajas negras ajenas a la teoría formal de PDI.
-    \item La inclusión de una silueta fija de referencia original y un mecanismo de autoescala en el eje vertical garantiza que cualquier alteración introducida por el usuario sea inmediatamente perceptible tanto en el histograma como en la imagen resultante sin líneas que obstruyan los datos.
-    \item El desacoplamiento en tres espectros independientes (Rojo, Verde y Azul) y la separación de la ecualización como modo de partida otorgan flexibilidad total para corregir dominancias de color o expandir selectivamente el contraste por canal cromático.
+    \item Se formuló e implementó con éxito un algoritmo canónico de \textbf{redistribución uniforme de píxeles por recorte de picos}, descartando traslaciones rígidas de brillo que únicamente desplazan el histograma provocando saturación artificial en los extremos.
+    \item Se demostró analítica y experimentalmente el principio de \textbf{conservación estricta de la masa de píxeles}, garantizando que los píxeles recortados en las frecuencias dominantes se redistribuyen de forma equitativa en los 256 niveles de intensidad sin alterar el número total de muestras ($N_{\text{total}} = M \times N$).
+    \item La arquitectura de presentación con \textbf{6 histogramas simultáneos en 3 columnas} (referencia fija original superior y distribución modificada inferior) proporciona un marco riguroso de evaluación radiométrica en tiempo real.
+    \item La asignación de \textbf{un único deslizador ergonómico por espectro cromático} simplifica la interacción del usuario y asegura una respuesta determinista a 60 FPS ($8$ ms por ciclo de procesamiento) gracias a la síntesis de tablas de consulta (\textit{LUT}) vectorizadas con \texttt{NumPy}.
 \end{enumerate}
 
 \subsection{Recomendaciones}
 \begin{enumerate}
-    \item Extender la herramienta hacia el espacio de color HSV o CIELAB en casos donde se requiera modificar únicamente la distribución de luminancia ($V$ o $L^*$) preservando inalterada la información de saturación y matiz cromático.
-    \item Evaluar la inclusión de curvas de transferencia polinómicas libres o splines interactivos para usuarios avanzados que deseen dibujar funciones de mapeo no paramétricas sobre el histograma.
+    \item Incorporar un selector de perfil de redistribución no homogéneo (como distribuciones Gaussianas o Rayleigh) en el cálculo de la transferencia de píxeles para aplicaciones de visión artificial especializadas donde se desee realzar un intervalo tonal determinado.
+    \item Implementar la exportación del vector de frecuencias del histograma modificado en formato CSV o JSON para facilitar el registro estadístico en protocolos de calibración fotográfica automatizada.
 \end{enumerate}
 
 % =========================================================

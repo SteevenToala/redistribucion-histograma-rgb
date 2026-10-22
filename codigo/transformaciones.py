@@ -1,125 +1,63 @@
 """
-Módulo de Transformaciones Canónicas y Avanzadas sobre Histogramas (PDI)
-========================================================================
+Módulo de Transformaciones Canónicas sobre Histogramas RGB (PDI)
+================================================================
 
-Este módulo desacopla la formulación matemática del pipeline visual:
-1. Ecualización acumulativa global por CDF.
-2. Límite de Picos CLAHE (Clip Limit) para mitigación de fondos uniformes.
-3. Especificación de Histograma Canónica (Matching bi-LUT para Gaussiana y Rayleigh).
-4. Inversión espectral (Negativo analítico).
-5. Curva Sigmoide en 'S' (Contraste simultáneo de sombras y luces).
-6. Recorte de rango dinámico de niveles (Windowing / r_min, r_max).
-7. Operaciones afines de brillo (desplazamiento) y contraste (estiramiento).
-8. Corrección de Medios Tonos (Ley de Potencias / Gamma).
+Implementación canónica del algoritmo de Redistribución de Píxeles por Recorte
+Uniforme de Picos (Peak Clipping & Mass Redistribution) según la teoría de PDI:
+1. Conteo del histograma discreto de frecuencias (0 a 255).
+2. Cálculo de la media uniforme teórica y del pico máximo.
+3. Determinación del umbral dinámico de corte U a partir del factor (0.0 a 1.0).
+4. Extracción del volumen de píxeles excedentes de los picos saturados.
+5. Redistribución uniforme de los píxeles excedentes a todos los 256 niveles.
+6. Síntesis de la tabla de consulta (LUT) de 256 niveles mediante CDF normalizada.
+7. Mapeo determinista de punto O(1) con conservación estricta de masa de píxeles.
 """
 
 import numpy as np
 
 
-def generar_distribucion_objetivo(tipo='gaussiana'):
+def redistribuir_picos_canal(canal: np.ndarray, factor_redistribucion: float):
     """
-    Genera la función de distribución acumulada (CDF) objetivo normalizada
-    para Especificación de Histograma según la teoría de González & Woods.
+    Redistribución canónica de píxeles mediante recorte uniforme de picos:
+    
+    Parámetros:
+    - canal: Matriz 2D (alto x ancho) con niveles de intensidad en [0, 255].
+    - factor_redistribucion: Valor numérico entre 0.0 (0%) y 1.0 (100%).
+    
+    Retorna:
+    - canal_out: Matriz con los píxeles redistribuidos (mismo tamaño y tipo).
+    - hist_orig: Histograma discreto original (256 bins).
+    - hist_mod: Histograma redistribuido resultante (256 bins, masa conservada).
+    - total_exceso: Cantidad total de píxeles transferidos de picos hacia los demás niveles.
     """
-    x = np.arange(256, dtype=np.float64)
-    if tipo == 'gaussiana':
-        mu, sigma = 127.5, 42.0
-        p = np.exp(-0.5 * ((x - mu) / sigma) ** 2)
-    elif tipo == 'rayleigh':
-        alpha = 65.0
-        p = (x / (alpha ** 2)) * np.exp(-(x ** 2) / (2.0 * (alpha ** 2)))
-    else:
-        p = np.ones(256, dtype=np.float64)
+    total_px = canal.size
+    hist_orig = np.bincount(canal.ravel(), minlength=256).astype(np.float64)
+    media_bin = total_px / 256.0
+    max_bin = float(hist_orig.max())
 
-    p /= p.sum()
-    return np.cumsum(p)
+    factor = float(np.clip(factor_redistribucion, 0.0, 1.0))
+    if factor <= 0.001:
+        return canal.copy(), hist_orig, hist_orig.copy(), 0
 
+    # 1. Umbral dinámico de corte descendente hacia la media teórica
+    umbral = max_bin - factor * (max_bin - media_bin)
+    exceso = np.maximum(hist_orig - umbral, 0.0)
+    total_exceso = float(exceso.sum())
 
-def calcular_lut_base(canal, modo='cdf', clip_factor=1.0):
-    """
-    Calcula la Look-Up Table (LUT) de 256 niveles de la transformación de partida.
-    """
-    conteo = np.bincount(canal.ravel(), minlength=256).astype(np.float64)
+    # 2. Redistribución uniforme de los píxeles de exceso a los 256 casilleros
+    hist_mod = np.minimum(hist_orig, umbral) + (total_exceso / 256.0)
 
-    # 1. Límite de Picos (Clip Limit CLAHE)
-    if clip_factor < 0.99:
-        media_bin = conteo.mean()
-        umbral = media_bin + clip_factor * (conteo.max() - media_bin)
-        exceso = np.maximum(conteo - umbral, 0.0)
-        conteo = np.minimum(conteo, umbral) + (exceso.sum() / 256.0)
+    # 3. Función de distribución acumulada (CDF) del histograma redistribuido
+    prob_acum = np.cumsum(hist_mod) / total_px
+    niveles_activos = np.where(hist_mod > 0)[0]
+    cdf_min = prob_acum[niveles_activos[0]] if len(niveles_activos) > 0 else 0.0
+    rango = 1.0 - cdf_min if (1.0 - cdf_min) > 0 else 1.0
 
-    prob_acumulada = np.cumsum(conteo) / conteo.sum()
+    # 4. Síntesis de la Look-Up Table (LUT) de 256 niveles
+    lut_eq = np.clip(np.round(((prob_acum - cdf_min) / rango) * 255.0), 0, 255)
+    r_id = np.arange(256, dtype=np.float64)
+    lut_final = np.clip(np.round((1.0 - factor) * r_id + factor * lut_eq), 0, 255).astype(np.uint8)
 
-    if modo == 'cdf':
-        niveles_activos = np.where(conteo > 0)[0]
-        if len(niveles_activos) == 0:
-            return np.arange(256, dtype=np.uint8)
-        cdf_min = prob_acumulada[niveles_activos[0]]
-        rango_util = 1.0 - cdf_min if (1.0 - cdf_min) > 0 else 1.0
-        nueva = np.zeros(256, dtype=np.float64)
-        for k in range(256):
-            if k >= niveles_activos[0]:
-                nueva[k] = ((prob_acumulada[k] - cdf_min) / rango_util) * 255.0
-            else:
-                nueva[k] = 0.0
-        return np.clip(np.round(nueva), 0, 255).astype(np.uint8)
-
-    elif modo in ['gaussiana', 'rayleigh']:
-        cdf_objetivo = generar_distribucion_objetivo(modo)
-        lut_match = np.zeros(256, dtype=np.uint8)
-        for k in range(256):
-            diff = np.abs(cdf_objetivo - prob_acumulada[k])
-            lut_match[k] = np.argmin(diff)
-        return lut_match
-
-    elif modo == 'negativo':
-        return np.arange(255, -1, -1, dtype=np.uint8)
-
-    return np.arange(256, dtype=np.uint8)
-
-
-def aplicar_curva_sigmoide(v_norm, factor_s):
-    """
-    Aplica una función logística sigmoide normalizada en [0.0, 1.0] centrada en 0.5.
-    """
-    if factor_s <= 0.01:
-        return v_norm
-    k = factor_s * 5.0
-
-    def sig(x):
-        return 1.0 / (1.0 + np.exp(-k * (x - 0.5)))
-
-    s0 = sig(0.0)
-    s1 = sig(1.0)
-    return np.clip((sig(v_norm) - s0) / (s1 - s0), 0.0, 1.0)
-
-
-def generar_lut_espectro(contraste, gamma, curva_s, r_min, r_max,
-                         fuerza_eq, lut_modo_base, desplazamiento=0.0):
-    """
-    Construye la Look-Up Table (LUT) integrada de 256 niveles para redistribución de histograma.
-    El procesamiento no traslada el histograma rígidamente, sino que redistribuye las frecuencias
-    mediante estiramiento dinámico (r_min, r_max), contraste (alfa) y curvatura no lineal (gamma).
-    """
-    r_identidad = np.arange(256, dtype=np.float64)
-
-    # 1. Ponderación por fuerza de ecualización (alpha-blending)
-    r_base = (1.0 - fuerza_eq) * r_identidad + fuerza_eq * lut_modo_base.astype(np.float64)
-
-    # 2. Redistribución por ventana de rango dinámico [r_min, r_max] (Estiramiento Canónico)
-    if r_max <= r_min:
-        r_max = r_min + 1.0
-    v_niveles = np.clip((r_base - r_min) / (r_max - r_min) * 255.0, 0.0, 255.0)
-
-    # 3. Estiramiento / Expansión de Contraste respecto al punto medio (sin traslación rígida)
-    v_affine = contraste * (v_niveles - 128.0) + 128.0
-    v_norm = np.clip(v_affine / 255.0, 0.0, 1.0)
-
-    # 4. Curva Sigmoide en 'S'
-    v_sigmoide = aplicar_curva_sigmoide(v_norm, curva_s)
-
-    # 5. Corrección Gamma de medios tonos (Redistribución no lineal de densidades)
-    gamma_seguro = max(gamma, 0.05)
-    v_gamma = 255.0 * (v_sigmoide ** (1.0 / gamma_seguro))
-
-    return np.clip(np.round(v_gamma), 0, 255).astype(np.uint8)
+    # 5. Mapeo de punto vectorizado en memoria O(1)
+    canal_out = lut_final[canal]
+    return canal_out, hist_orig, hist_mod, int(np.round(total_exceso))
