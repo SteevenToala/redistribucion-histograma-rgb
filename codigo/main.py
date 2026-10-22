@@ -5,230 +5,358 @@ from matplotlib.widgets import Slider, Button
 from PIL import Image
 
 
-def redistribuir_canal(canal_color):
+def calcular_lut_ecualizacion(canal):
     """
-    Funcion para redistribuir el histograma de un canal individual (Rojo, Verde o Azul)
-    expandiendo las frecuencias en todo el rango [0, 255]:
-    conteo de frecuencias -> probabilidad acumulada -> tabla de conversion (LUT).
+    Calcula de forma manual la Look-Up Table (LUT) de ecualizacion clasica por CDF:
+    1. Conteo de frecuencias (histograma discreto).
+    2. Probabilidad acumulada (CDF).
+    3. Normalizacion con CDF_min para estirar de 0 a 255.
     """
-    alto_imagen, ancho_imagen = canal_color.shape
-    total_pixeles = alto_imagen * ancho_imagen
+    alto, ancho = canal.shape
+    total_pixeles = alto * ancho
 
-    # 1. Contar frecuencias de cada nivel de intensidad (del tono mas oscuro 0 al mas claro 255)
-    # Creamos un arreglo de 256 casilleros vacios (uno para cada nivel de intensidad)
-    conteo_intensidades = np.zeros(256, dtype=np.float64)
-    for fila in range(alto_imagen):
-        for columna in range(ancho_imagen):
-            nivel_intensidad_pixel = canal_color[fila, columna]
-            conteo_intensidades[nivel_intensidad_pixel] += 1.0
+    # 1. Conteo de frecuencias por nivel de intensidad
+    conteo = np.bincount(canal.ravel(), minlength=256).astype(np.float64)
 
-    # 2. Calcular la probabilidad acumulada (del tono mas oscuro al mas claro)
-    probabilidad_acumulada = np.zeros(256, dtype=np.float64)
-    suma_acumulada = 0.0
-    for nivel_intensidad in range(256):
-        probabilidad_este_nivel = conteo_intensidades[nivel_intensidad] / total_pixeles
-        suma_acumulada += probabilidad_este_nivel
-        probabilidad_acumulada[nivel_intensidad] = suma_acumulada
+    # 2. Probabilidad acumulada (CDF)
+    prob_acumulada = np.cumsum(conteo) / total_pixeles
 
-    # 3. Encontrar el nivel mas oscuro que realmente existe en la foto (intensidad mayor a 0)
-    niveles_con_pixeles = np.where(conteo_intensidades > 0)[0]
-    if len(niveles_con_pixeles) == 0:
-        return canal_color.copy()
+    # 3. Primer nivel con pixeles activos
+    niveles_activos = np.where(conteo > 0)[0]
+    if len(niveles_activos) == 0:
+        return np.arange(256, dtype=np.uint8)
 
-    prob_acumulada_minima = probabilidad_acumulada[niveles_con_pixeles[0]]
-    rango_probabilidad_util = 1.0 - prob_acumulada_minima if (1.0 - prob_acumulada_minima) > 0 else 1.0
+    cdf_min = prob_acumulada[niveles_activos[0]]
+    rango_util = 1.0 - cdf_min if (1.0 - cdf_min) > 0 else 1.0
 
-    # 4. Crear la tabla de conversion directa (LUT = Look-Up Table)
-    # Mapea: "intensidad anterior" -> "nueva intensidad estirada de 0 (oscuro) a 255 (claro)"
-    tabla_conversion_intensidad = np.zeros(256, dtype=np.uint8)
-    for nivel_intensidad in niveles_con_pixeles:
-        nueva_intensidad_calculada = ((probabilidad_acumulada[nivel_intensidad] - prob_acumulada_minima) / rango_probabilidad_util) * 255.0
-        tabla_conversion_intensidad[nivel_intensidad] = np.uint8(np.round(nueva_intensidad_calculada))
+    # 4. Construccion de la tabla de mapeo directo (LUT)
+    lut_eq = np.zeros(256, dtype=np.uint8)
+    for k in range(256):
+        if k >= niveles_activos[0]:
+            nueva_intensidad = ((prob_acumulada[k] - cdf_min) / rango_util) * 255.0
+            lut_eq[k] = np.uint8(np.clip(np.round(nueva_intensidad), 0, 255))
+        else:
+            lut_eq[k] = 0
 
-    # 5. Asignar los nuevos niveles de intensidad a cada pixel de la imagen
-    canal_redistribuido = np.zeros((alto_imagen, ancho_imagen), dtype=np.uint8)
-    for fila in range(alto_imagen):
-        for columna in range(ancho_imagen):
-            canal_redistribuido[fila, columna] = tabla_conversion_intensidad[canal_color[fila, columna]]
-
-    return canal_redistribuido
+    return lut_eq
 
 
-def aplicar_nivel_ajuste(canal_original, canal_redistribuido, porcentaje_ajuste_decimal):
+def calcular_lut_especificacion(canal, tipo_objetivo='gaussiano'):
     """
-    Mezcla ponderada entre el canal original y el canal redistribuido segun el slider:
-    porcentaje_ajuste_decimal = 0.0 -> 0% (imagen original sin cambios)
-    porcentaje_ajuste_decimal = 1.0 -> 100% (redistribucion completa)
+    Especificacion de Histograma (Gonzalez & Woods):
+    Mapea el histograma original a una distribucion objetivo deseada:
+    z = G^-1( T(r) )
+    Donde T(r) es la CDF del canal y G(z) es la CDF del histograma objetivo.
     """
-    if porcentaje_ajuste_decimal <= 0.0:
-        return canal_original.copy()
-    if porcentaje_ajuste_decimal >= 1.0:
-        return canal_redistribuido.copy()
+    total = canal.size
+    conteo_orig = np.bincount(canal.ravel(), minlength=256).astype(np.float64)
+    cdf_orig = np.cumsum(conteo_orig) / total
 
-    # Formula de mezcla: (1 - ajuste) * original + ajuste * redistribuido
-    mezcla_pixeles = ((1.0 - porcentaje_ajuste_decimal) * canal_original.astype(np.float64) +
-                      porcentaje_ajuste_decimal * canal_redistribuido.astype(np.float64))
+    z = np.arange(256, dtype=np.float64)
+    if tipo_objetivo == 'gaussiano':
+        # Campana simetrica centrada en 128 con dispersion media
+        p_deseada = np.exp(-((z - 128.0) ** 2) / (2.0 * (45.0 ** 2)))
+    elif tipo_objetivo == 'bimodal':
+        # Dos concentraciones: sombras (60) y luces (195) para alto contraste
+        p_deseada = (np.exp(-((z - 60.0) ** 2) / (2.0 * (28.0 ** 2))) +
+                     np.exp(-((z - 195.0) ** 2) / (2.0 * (28.0 ** 2))))
+    else:
+        p_deseada = np.ones(256, dtype=np.float64)
 
-    return np.clip(np.round(mezcla_pixeles), 0, 255).astype(np.uint8)
+    p_deseada = p_deseada / np.sum(p_deseada)
+    cdf_deseada = np.cumsum(p_deseada)
+
+    # Inversion de la CDF: buscar para cada r el z tal que G(z) ~ T(r)
+    lut_especificacion = np.zeros(256, dtype=np.uint8)
+    for r in range(256):
+        val_t = cdf_orig[r]
+        idx_z = np.argmin(np.abs(cdf_deseada - val_t))
+        lut_especificacion[r] = np.uint8(idx_z)
+
+    return lut_especificacion
+
+
+def generar_lut_canal(brillo, contraste, gamma, ecualizar_pct, lut_eq_base, lut_override=None):
+    """
+    Genera la LUT combinada para modificar el histograma del canal:
+    - brillo: desplazamiento horizontal (offset) [-100, 100].
+    - contraste: expansion / compresion alrededor del centro 128 [0.2, 3.0].
+    - gamma: curvatura no lineal de medios tonos [0.2, 3.0].
+    - ecualizar_pct: porcentaje de mezcla con la ecualizacion uniforme [0.0, 1.0].
+    - lut_override: LUT fija opcional si se aplico una especificacion de histograma.
+    """
+    if lut_override is not None:
+        return lut_override.copy()
+
+    # Base de intensidades discretas de entrada [0, 255]
+    r = np.arange(256, dtype=np.float64)
+
+    # 1. Contraste y Brillo (desplazamiento y ensanchamiento del histograma)
+    # v1 = contraste * (r - 128) + 128 + brillo
+    v1 = contraste * (r - 128.0) + 128.0 + brillo
+
+    # 2. Correccion Gamma (curvatura de tonos medios)
+    v_norm = np.clip(v1 / 255.0, 0.0, 1.0)
+    gamma_seguro = max(gamma, 0.01)
+    v2 = 255.0 * (v_norm ** (1.0 / gamma_seguro))
+
+    # 3. Mezcla ponderada con la ecualizacion clasica por CDF
+    factor_eq = np.clip(ecualizar_pct, 0.0, 1.0)
+    v_final = (1.0 - factor_eq) * v2 + factor_eq * lut_eq_base.astype(np.float64)
+
+    return np.clip(np.round(v_final), 0, 255).astype(np.uint8)
 
 
 def main():
-    # 1. Cargar la imagen a procesar
-    ruta_imagen = os.path.join(os.path.dirname(__file__), 'images.jpg')
-    imagen_cargada = Image.open(ruta_imagen).convert('RGB')
-    matriz_imagen = np.array(imagen_cargada)
+    # 1. Cargar la imagen base
+    carpeta_actual = os.path.dirname(os.path.abspath(__file__))
+    ruta_imagen = os.path.join(carpeta_actual, 'images.jpg')
+    if not os.path.exists(ruta_imagen):
+        ruta_imagen = os.path.join(carpeta_actual, 'tu_imagen.jpg')
 
-    # 2. Separar los tres canales de color: Rojo (R), Verde (G) y Azul (B)
-    canal_rojo = matriz_imagen[:, :, 0]
-    canal_verde = matriz_imagen[:, :, 1]
-    canal_azul = matriz_imagen[:, :, 2]
+    imagen_pil = Image.open(ruta_imagen).convert('RGB')
+    matriz_original = np.array(imagen_pil)
 
-    # 3. Precalcular la redistribucion para cada canal de color (al 100%)
-    rojo_redistribuido = redistribuir_canal(canal_rojo)
-    verde_redistribuido = redistribuir_canal(canal_verde)
-    azul_redistribuido = redistribuir_canal(canal_azul)
+    # Separar los tres espectros cromáticos independientes
+    canal_rojo = matriz_original[:, :, 0]
+    canal_verde = matriz_original[:, :, 1]
+    canal_azul = matriz_original[:, :, 2]
 
-    # Histogramas originales (sirven como referencia fija en los graficos)
-    hist_rojo_original = np.bincount(canal_rojo.ravel(), minlength=256)
-    hist_verde_original = np.bincount(canal_verde.ravel(), minlength=256)
-    hist_azul_original = np.bincount(canal_azul.ravel(), minlength=256)
+    # Precalcular las LUTs de ecualizacion clasica
+    lut_eq_rojo = calcular_lut_ecualizacion(canal_rojo)
+    lut_eq_verde = calcular_lut_ecualizacion(canal_verde)
+    lut_eq_azul = calcular_lut_ecualizacion(canal_azul)
 
-    # Histogramas redistribuidos al 100% (para fijar la escala vertical maxima de los ejes)
-    hist_rojo_redistribuido = np.bincount(rojo_redistribuido.ravel(), minlength=256)
-    hist_verde_redistribuido = np.bincount(verde_redistribuido.ravel(), minlength=256)
-    hist_azul_redistribuido = np.bincount(azul_redistribuido.ravel(), minlength=256)
+    # Histogramas originales fijos (sirven como contorno de referencia)
+    hist_r_orig = np.bincount(canal_rojo.ravel(), minlength=256)
+    hist_g_orig = np.bincount(canal_verde.ravel(), minlength=256)
+    hist_b_orig = np.bincount(canal_azul.ravel(), minlength=256)
 
-    # 4. Crear la ventana interactiva
-    figura = plt.figure(figsize=(14, 9))
-    figura.canvas.manager.set_window_title('Ajuste y Redistribución de Histogramas RGB')
+    # Variables de estado para sobreescritura por especificacion
+    estado_override = {'rojo': None, 'verde': None, 'azul': None}
 
-    # Distribucion visual: Fila 1 para Histogramas/Sliders, Fila 2 para Imagenes
-    rejilla = figura.add_gridspec(2, 6, height_ratios=[1, 1.25], hspace=0.45, wspace=0.25)
-    niveles_intensidad_eje = np.arange(256)
+    # 2. Configurar la ventana grafica interactiva
+    figura = plt.figure(figsize=(15.5, 9.8))
+    figura.canvas.manager.set_window_title('Modificador Interactivo de Histogramas RGB por Espectro')
 
-    # --- Subgrafico Histograma Canal Rojo ---
-    eje_hist_rojo = figura.add_subplot(rejilla[0, 0:2])
-    eje_hist_rojo.step(niveles_intensidad_eje, hist_rojo_original, where='mid', color='#455A64', linewidth=1.2, linestyle='--', label='Original', zorder=4)
-    eje_hist_rojo.fill_between(niveles_intensidad_eje, hist_rojo_original, step='mid', color='#CFD8DC', alpha=0.35, zorder=2)
-    barras_rojo = eje_hist_rojo.bar(niveles_intensidad_eje, hist_rojo_original.copy(), width=1.0, color='#E53935', alpha=0.75, label='Actual', zorder=3)
-    eje_hist_rojo.set_xlim(0, 255)
-    eje_hist_rojo.set_ylim(0, max(hist_rojo_original.max(), hist_rojo_redistribuido.max()) * 1.08)
-    eje_hist_rojo.legend(fontsize=8, loc='upper right')
-    eje_hist_rojo.grid(True, linestyle=':', alpha=0.4)
+    eje_x = np.arange(256)
 
-    # --- Subgrafico Histograma Canal Verde ---
-    eje_hist_verde = figura.add_subplot(rejilla[0, 2:4])
-    eje_hist_verde.step(niveles_intensidad_eje, hist_verde_original, where='mid', color='#455A64', linewidth=1.2, linestyle='--', label='Original', zorder=4)
-    eje_hist_verde.fill_between(niveles_intensidad_eje, hist_verde_original, step='mid', color='#CFD8DC', alpha=0.35, zorder=2)
-    barras_verde = eje_hist_verde.bar(niveles_intensidad_eje, hist_verde_original.copy(), width=1.0, color='#43A047', alpha=0.75, label='Actual', zorder=3)
-    eje_hist_verde.set_xlim(0, 255)
-    eje_hist_verde.set_ylim(0, max(hist_verde_original.max(), hist_verde_redistribuido.max()) * 1.08)
-    eje_hist_verde.legend(fontsize=8, loc='upper right')
-    eje_hist_verde.grid(True, linestyle=':', alpha=0.4)
+    # --- ZONA SUPERIOR: Histogramas de los 3 Espectros ---
+    # Espectro Rojo
+    ax_hist_r = figura.add_axes([0.05, 0.70, 0.27, 0.23])
+    ax_hist_r.step(eje_x, hist_r_orig, where='mid', color='#78909C', linestyle='--', linewidth=1.1, label='Original', zorder=2)
+    ax_hist_r.fill_between(eje_x, hist_r_orig, step='mid', color='#CFD8DC', alpha=0.3, zorder=1)
+    barras_r = ax_hist_r.bar(eje_x, hist_r_orig.copy(), width=1.0, color='#E53935', alpha=0.75, label='Modificado', zorder=3)
+    ax_hist_r.set_xlim(0, 255)
+    max_y_r = max(hist_r_orig.max(), np.bincount(lut_eq_rojo[canal_rojo].ravel(), minlength=256).max()) * 1.15
+    ax_hist_r.set_ylim(0, max_y_r)
+    ax_hist_r.legend(loc='upper right', fontsize=8)
+    ax_hist_r.grid(True, linestyle=':', alpha=0.4)
 
-    # --- Subgrafico Histograma Canal Azul ---
-    eje_hist_azul = figura.add_subplot(rejilla[0, 4:6])
-    eje_hist_azul.step(niveles_intensidad_eje, hist_azul_original, where='mid', color='#455A64', linewidth=1.2, linestyle='--', label='Original', zorder=4)
-    eje_hist_azul.fill_between(niveles_intensidad_eje, hist_azul_original, step='mid', color='#CFD8DC', alpha=0.35, zorder=2)
-    barras_azul = eje_hist_azul.bar(niveles_intensidad_eje, hist_azul_original.copy(), width=1.0, color='#1E88E5', alpha=0.75, label='Actual', zorder=3)
-    eje_hist_azul.set_xlim(0, 255)
-    eje_hist_azul.set_ylim(0, max(hist_azul_original.max(), hist_azul_redistribuido.max()) * 1.08)
-    eje_hist_azul.legend(fontsize=8, loc='upper right')
-    eje_hist_azul.grid(True, linestyle=':', alpha=0.4)
+    # Espectro Verde
+    ax_hist_g = figura.add_axes([0.365, 0.70, 0.27, 0.23])
+    ax_hist_g.step(eje_x, hist_g_orig, where='mid', color='#78909C', linestyle='--', linewidth=1.1, label='Original', zorder=2)
+    ax_hist_g.fill_between(eje_x, hist_g_orig, step='mid', color='#CFD8DC', alpha=0.3, zorder=1)
+    barras_g = ax_hist_g.bar(eje_x, hist_g_orig.copy(), width=1.0, color='#43A047', alpha=0.75, label='Modificado', zorder=3)
+    ax_hist_g.set_xlim(0, 255)
+    max_y_g = max(hist_g_orig.max(), np.bincount(lut_eq_verde[canal_verde].ravel(), minlength=256).max()) * 1.15
+    ax_hist_g.set_ylim(0, max_y_g)
+    ax_hist_g.legend(loc='upper right', fontsize=8)
+    ax_hist_g.grid(True, linestyle=':', alpha=0.4)
 
-    # Sliders de control interactivo debajo de cada histograma
-    posicion_rojo = eje_hist_rojo.get_position()
-    posicion_verde = eje_hist_verde.get_position()
-    posicion_azul = eje_hist_azul.get_position()
+    # Espectro Azul
+    ax_hist_b = figura.add_axes([0.68, 0.70, 0.27, 0.23])
+    ax_hist_b.step(eje_x, hist_b_orig, where='mid', color='#78909C', linestyle='--', linewidth=1.1, label='Original', zorder=2)
+    ax_hist_b.fill_between(eje_x, hist_b_orig, step='mid', color='#CFD8DC', alpha=0.3, zorder=1)
+    barras_b = ax_hist_b.bar(eje_x, hist_b_orig.copy(), width=1.0, color='#1E88E5', alpha=0.75, label='Modificado', zorder=3)
+    ax_hist_b.set_xlim(0, 255)
+    max_y_b = max(hist_b_orig.max(), np.bincount(lut_eq_azul[canal_azul].ravel(), minlength=256).max()) * 1.15
+    ax_hist_b.set_ylim(0, max_y_b)
+    ax_hist_b.legend(loc='upper right', fontsize=8)
+    ax_hist_b.grid(True, linestyle=':', alpha=0.4)
 
-    eje_slider_rojo = plt.axes([posicion_rojo.x0, posicion_rojo.y0 - 0.055, posicion_rojo.width, 0.024])
-    eje_slider_verde = plt.axes([posicion_verde.x0, posicion_verde.y0 - 0.055, posicion_verde.width, 0.024])
-    eje_slider_azul = plt.axes([posicion_azul.x0, posicion_azul.y0 - 0.055, posicion_azul.width, 0.024])
+    # --- ZONA MEDIA: Controles Deslizantes por Espectro ---
+    # Dimensiones para sliders
+    w_slider = 0.20
+    h_slider = 0.016
+    x_r = 0.115
+    x_g = 0.430
+    x_b = 0.745
 
-    slider_rojo = Slider(eje_slider_rojo, 'Rojo (%)', 0.0, 100.0, valinit=0.0, valstep=1.0)
-    slider_verde = Slider(eje_slider_verde, 'Verde (%)', 0.0, 100.0, valinit=0.0, valstep=1.0)
-    slider_azul = Slider(eje_slider_azul, 'Azul (%)', 0.0, 100.0, valinit=0.0, valstep=1.0)
+    # Fila 1: Brillo / Desplazamiento horizontal
+    ax_brillo_r = figura.add_axes([x_r, 0.640, w_slider, h_slider])
+    ax_brillo_g = figura.add_axes([x_g, 0.640, w_slider, h_slider])
+    ax_brillo_b = figura.add_axes([x_b, 0.640, w_slider, h_slider])
 
-    # Botones inferiores de accion rapida
-    eje_boton_reiniciar = plt.axes([0.31, 0.012, 0.17, 0.030])
-    boton_reiniciar = Button(eje_boton_reiniciar, 'Reiniciar (0%)', color='#ECEFF1', hovercolor='#CFD8DC')
+    slider_brillo_r = Slider(ax_brillo_r, 'Desplazamiento', -100.0, 100.0, valinit=0.0, valstep=1.0, color='#EF5350')
+    slider_brillo_g = Slider(ax_brillo_g, 'Desplazamiento', -100.0, 100.0, valinit=0.0, valstep=1.0, color='#66BB6A')
+    slider_brillo_b = Slider(ax_brillo_b, 'Desplazamiento', -100.0, 100.0, valinit=0.0, valstep=1.0, color='#42A5F5')
 
-    eje_boton_redistribuir = plt.axes([0.51, 0.012, 0.18, 0.030])
-    boton_redistribuir = Button(eje_boton_redistribuir, 'Redistribuir (100%)', color='#E0F2F1', hovercolor='#B2DFDB')
+    # Fila 2: Contraste / Expansion del ancho
+    ax_cont_r = figura.add_axes([x_r, 0.612, w_slider, h_slider])
+    ax_cont_g = figura.add_axes([x_g, 0.612, w_slider, h_slider])
+    ax_cont_b = figura.add_axes([x_b, 0.612, w_slider, h_slider])
 
-    # Fila 2: Visualizacion de la Imagen Original vs Imagen Resultante
-    eje_imagen_original = figura.add_subplot(rejilla[1, 0:3])
-    eje_imagen_original.imshow(matriz_imagen)
-    eje_imagen_original.set_title('Imagen Original', fontsize=11, fontweight='bold')
-    eje_imagen_original.axis('off')
+    slider_cont_r = Slider(ax_cont_r, 'Contraste / Rango', 0.2, 3.0, valinit=1.0, valstep=0.05, color='#EF5350')
+    slider_cont_g = Slider(ax_cont_g, 'Contraste / Rango', 0.2, 3.0, valinit=1.0, valstep=0.05, color='#66BB6A')
+    slider_cont_b = Slider(ax_cont_b, 'Contraste / Rango', 0.2, 3.0, valinit=1.0, valstep=0.05, color='#42A5F5')
 
-    eje_imagen_resultado = figura.add_subplot(rejilla[1, 3:6])
-    visor_imagen_resultado = eje_imagen_resultado.imshow(matriz_imagen.copy())
-    titulo_resultado = eje_imagen_resultado.set_title('Imagen Resultante (0%)', fontsize=11, fontweight='bold')
-    eje_imagen_resultado.axis('off')
+    # Fila 3: Gamma / Forma de tonos medios
+    ax_gamma_r = figura.add_axes([x_r, 0.584, w_slider, h_slider])
+    ax_gamma_g = figura.add_axes([x_g, 0.584, w_slider, h_slider])
+    ax_gamma_b = figura.add_axes([x_b, 0.584, w_slider, h_slider])
 
-    # 5. Funcion que actualiza la imagen y los histogramas en tiempo real
+    slider_gamma_r = Slider(ax_gamma_r, 'Curvatura Gamma', 0.2, 3.0, valinit=1.0, valstep=0.05, color='#EF5350')
+    slider_gamma_g = Slider(ax_gamma_g, 'Curvatura Gamma', 0.2, 3.0, valinit=1.0, valstep=0.05, color='#66BB6A')
+    slider_gamma_b = Slider(ax_gamma_b, 'Curvatura Gamma', 0.2, 3.0, valinit=1.0, valstep=0.05, color='#42A5F5')
+
+    # Fila 4: Ecualizacion CDF uniforme
+    ax_eq_r = figura.add_axes([x_r, 0.556, w_slider, h_slider])
+    ax_eq_g = figura.add_axes([x_g, 0.556, w_slider, h_slider])
+    ax_eq_b = figura.add_axes([x_b, 0.556, w_slider, h_slider])
+
+    slider_eq_r = Slider(ax_eq_r, 'Ecualizar CDF (%)', 0.0, 100.0, valinit=0.0, valstep=1.0, color='#E53935')
+    slider_eq_g = Slider(ax_eq_g, 'Ecualizar CDF (%)', 0.0, 100.0, valinit=0.0, valstep=1.0, color='#43A047')
+    slider_eq_b = Slider(ax_eq_b, 'Ecualizar CDF (%)', 0.0, 100.0, valinit=0.0, valstep=1.0, color='#1E88E5')
+
+    # --- ZONA INFERIOR: Imagen Original vs Imagen Modificada ---
+    ax_img_orig = figura.add_axes([0.05, 0.10, 0.43, 0.41])
+    ax_img_orig.imshow(matriz_original)
+    ax_img_orig.set_title(f'Imagen Original ({matriz_original.shape[1]}x{matriz_original.shape[0]} px)', fontsize=11, fontweight='bold', pad=8)
+    ax_img_orig.axis('off')
+
+    ax_img_mod = figura.add_axes([0.52, 0.10, 0.43, 0.41])
+    visor_img_mod = ax_img_mod.imshow(matriz_original.copy())
+    titulo_mod = ax_img_mod.set_title('Imagen Modificada Resultante', fontsize=11, fontweight='bold', pad=8)
+    ax_img_mod.axis('off')
+
+    # Guardamos la imagen modificada actual para exportar si el usuario lo desea
+    cache_resultado = {'imagen': matriz_original.copy()}
+
+    # --- FUNCION PRINCIPAL DE ACTUALIZACION EN TIEMPO REAL ---
     def actualizar(_=None):
-        # Convertimos los valores de los sliders (0 a 100%) a decimal (0.0 a 1.0)
-        ajuste_rojo = slider_rojo.val / 100.0
-        ajuste_verde = slider_verde.val / 100.0
-        ajuste_azul = slider_azul.val / 100.0
+        # 1. Generar la LUT para cada canal segun sus controles activos
+        lut_r = generar_lut_canal(slider_brillo_r.val, slider_cont_r.val, slider_gamma_r.val,
+                                  slider_eq_r.val / 100.0, lut_eq_rojo, estado_override['rojo'])
+        lut_g = generar_lut_canal(slider_brillo_g.val, slider_cont_g.val, slider_gamma_g.val,
+                                  slider_eq_g.val / 100.0, lut_eq_verde, estado_override['verde'])
+        lut_b = generar_lut_canal(slider_brillo_b.val, slider_cont_b.val, slider_gamma_b.val,
+                                  slider_eq_b.val / 100.0, lut_eq_azul, estado_override['azul'])
 
-        # Aplicamos la formula de mezcla a cada canal de color de forma independiente
-        canal_rojo_actual = aplicar_nivel_ajuste(canal_rojo, rojo_redistribuido, ajuste_rojo)
-        canal_verde_actual = aplicar_nivel_ajuste(canal_verde, verde_redistribuido, ajuste_verde)
-        canal_azul_actual = aplicar_nivel_ajuste(canal_azul, azul_redistribuido, ajuste_azul)
+        # 2. Mapear cada canal mediante su Look-Up Table
+        canal_r_mod = lut_r[canal_rojo]
+        canal_g_mod = lut_g[canal_verde]
+        canal_b_mod = lut_b[canal_azul]
 
-        # Unimos los 3 canales actualizados para formar la imagen RGB completa
-        imagen_rgb_actual = np.stack([canal_rojo_actual, canal_verde_actual, canal_azul_actual], axis=2)
-        visor_imagen_resultado.set_data(imagen_rgb_actual)
+        # 3. Ensamblar imagen resultante RGB
+        img_resultado = np.stack([canal_r_mod, canal_g_mod, canal_b_mod], axis=2)
+        visor_img_mod.set_data(img_resultado)
+        cache_resultado['imagen'] = img_resultado
 
-        # Actualizar titulo segun los sliders
-        if ajuste_rojo == 0.0 and ajuste_verde == 0.0 and ajuste_azul == 0.0:
-            titulo_resultado.set_text('Imagen Original (0%)')
-        elif ajuste_rojo == 1.0 and ajuste_verde == 1.0 and ajuste_azul == 1.0:
-            titulo_resultado.set_text('Imagen Redistribuida (100%)')
-        else:
-            titulo_resultado.set_text(f'Imagen Ajustada (Rojo: {int(slider_rojo.val)}% | Verde: {int(slider_verde.val)}% | Azul: {int(slider_azul.val)}%)')
+        # 4. Calcular nuevos conteos de frecuencias de los histogramas
+        hist_r_mod = np.bincount(canal_r_mod.ravel(), minlength=256)
+        hist_g_mod = np.bincount(canal_g_mod.ravel(), minlength=256)
+        hist_b_mod = np.bincount(canal_b_mod.ravel(), minlength=256)
 
-        # Recalcular conteo de intensidades para los histogramas actuales
-        hist_rojo_actual = np.bincount(canal_rojo_actual.ravel(), minlength=256)
-        hist_verde_actual = np.bincount(canal_verde_actual.ravel(), minlength=256)
-        hist_azul_actual = np.bincount(canal_azul_actual.ravel(), minlength=256)
-
-        # Actualizar alturas de las barras en los graficos
-        for barra, conteo in zip(barras_rojo, hist_rojo_actual):
+        # 5. Actualizar las barras graficas
+        for barra, conteo in zip(barras_r, hist_r_mod):
             barra.set_height(conteo)
-        for barra, conteo in zip(barras_verde, hist_verde_actual):
+        for barra, conteo in zip(barras_g, hist_g_mod):
             barra.set_height(conteo)
-        for barra, conteo in zip(barras_azul, hist_azul_actual):
+        for barra, conteo in zip(barras_b, hist_b_mod):
             barra.set_height(conteo)
 
-        # Titulos de los histogramas con media y desviacion estandar
-        eje_hist_rojo.set_title(f'Rojo | {int(slider_rojo.val)}% | Media: {canal_rojo_actual.mean():.1f} | Desv: {canal_rojo_actual.std():.1f}', fontsize=9, fontweight='bold')
-        eje_hist_verde.set_title(f'Verde | {int(slider_verde.val)}% | Media: {canal_verde_actual.mean():.1f} | Desv: {canal_verde_actual.std():.1f}', fontsize=9, fontweight='bold')
-        eje_hist_azul.set_title(f'Azul | {int(slider_azul.val)}% | Media: {canal_azul_actual.mean():.1f} | Desv: {canal_azul_actual.std():.1f}', fontsize=9, fontweight='bold')
+        # 6. Actualizar titulos con metricas estadisticas en vivo
+        ax_hist_r.set_title(f'Espectro Rojo | μ: {canal_r_mod.mean():.1f} | σ: {canal_r_mod.std():.1f} | [{canal_r_mod.min()}, {canal_r_mod.max()}]',
+                            fontsize=9, fontweight='bold', color='#B71C1C')
+        ax_hist_g.set_title(f'Espectro Verde | μ: {canal_g_mod.mean():.1f} | σ: {canal_g_mod.std():.1f} | [{canal_g_mod.min()}, {canal_g_mod.max()}]',
+                            fontsize=9, fontweight='bold', color='#1B5E20')
+        ax_hist_b.set_title(f'Espectro Azul | μ: {canal_b_mod.mean():.1f} | σ: {canal_b_mod.std():.1f} | [{canal_b_mod.min()}, {canal_b_mod.max()}]',
+                            fontsize=9, fontweight='bold', color='#0D47A1')
 
+        # Refrescar lienzo de Matplotlib
         figura.canvas.draw_idle()
 
-    def resetear(event):
-        slider_rojo.set_val(0.0)
-        slider_verde.set_val(0.0)
-        slider_azul.set_val(0.0)
+    # Callback para cuando el usuario mueve sliders (limpia sobreescrituras)
+    def on_slider_touch(_=None):
+        estado_override['rojo'] = None
+        estado_override['verde'] = None
+        estado_override['azul'] = None
+        actualizar()
 
-    def redistribuir_todo(event):
-        slider_rojo.set_val(100.0)
-        slider_verde.set_val(100.0)
-        slider_azul.set_val(100.0)
+    for sld in [slider_brillo_r, slider_brillo_g, slider_brillo_b,
+                slider_cont_r, slider_cont_g, slider_cont_b,
+                slider_gamma_r, slider_gamma_g, slider_gamma_b,
+                slider_eq_r, slider_eq_g, slider_eq_b]:
+        sld.on_changed(on_slider_touch)
 
-    # Conectar eventos de los sliders y botones
-    slider_rojo.on_changed(actualizar)
-    slider_verde.on_changed(actualizar)
-    slider_azul.on_changed(actualizar)
-    boton_reiniciar.on_clicked(resetear)
-    boton_redistribuir.on_clicked(redistribuir_todo)
+    # --- BOTONES DE ACCION RAPIDA Y ESPECIFICACION DE FORMA ---
+    ax_btn_reset = figura.add_axes([0.05, 0.025, 0.16, 0.038])
+    btn_reset = Button(ax_btn_reset, 'Restablecer Todo (0)', color='#ECEFF1', hovercolor='#CFD8DC')
 
-    # Mostrar estado inicial
+    ax_btn_eq = figura.add_axes([0.23, 0.025, 0.17, 0.038])
+    btn_eq = Button(ax_btn_eq, 'Ecualizar Todo (100%)', color='#E0F2F1', hovercolor='#B2DFDB')
+
+    ax_btn_gauss = figura.add_axes([0.42, 0.025, 0.18, 0.038])
+    btn_gauss = Button(ax_btn_gauss, 'Forma Gaussiana (Campana)', color='#EDE7F6', hovercolor='#D1C4E9')
+
+    ax_btn_bimodal = figura.add_axes([0.62, 0.025, 0.18, 0.038])
+    btn_bimodal = Button(ax_btn_bimodal, 'Alto Contraste (Bimodal)', color='#FFF3E0', hovercolor='#FFE0B2')
+
+    ax_btn_save = figura.add_axes([0.82, 0.025, 0.13, 0.038])
+    btn_save = Button(ax_btn_save, 'Guardar Resultado', color='#E8F5E9', hovercolor='#C8E6C9')
+
+    def accion_reset(event):
+        estado_override['rojo'] = None
+        estado_override['verde'] = None
+        estado_override['azul'] = None
+        for sld in [slider_brillo_r, slider_brillo_g, slider_brillo_b]:
+            sld.set_val(0.0)
+        for sld in [slider_cont_r, slider_cont_g, slider_cont_b]:
+            sld.set_val(1.0)
+        for sld in [slider_gamma_r, slider_gamma_g, slider_gamma_b]:
+            sld.set_val(1.0)
+        for sld in [slider_eq_r, slider_eq_g, slider_eq_b]:
+            sld.set_val(0.0)
+
+    def accion_ecualizar(event):
+        estado_override['rojo'] = None
+        estado_override['verde'] = None
+        estado_override['azul'] = None
+        for sld in [slider_eq_r, slider_eq_g, slider_eq_b]:
+            sld.set_val(100.0)
+
+    def accion_gaussiano(event):
+        # Aplica especificacion de forma gaussiana a los 3 espectros
+        estado_override['rojo'] = calcular_lut_especificacion(canal_rojo, 'gaussiano')
+        estado_override['verde'] = calcular_lut_especificacion(canal_verde, 'gaussiano')
+        estado_override['azul'] = calcular_lut_especificacion(canal_azul, 'gaussiano')
+        actualizar()
+
+    def accion_bimodal(event):
+        # Aplica especificacion de forma bimodal (alto contraste) a los 3 espectros
+        estado_override['rojo'] = calcular_lut_especificacion(canal_rojo, 'bimodal')
+        estado_override['verde'] = calcular_lut_especificacion(canal_verde, 'bimodal')
+        estado_override['azul'] = calcular_lut_especificacion(canal_azul, 'bimodal')
+        actualizar()
+
+    def accion_guardar(event):
+        salida_img = os.path.join(carpeta_actual, 'resultado_redistribucion.png')
+        salida_captura = os.path.join(carpeta_actual, 'resultado_ecualizacion.png')
+        # Guardar imagen procesada
+        Image.fromarray(cache_resultado['imagen']).save(salida_img)
+        # Guardar captura completa de la ventana con graficos e histogramas
+        figura.savefig(salida_captura, dpi=180, bbox_inches='tight')
+        btn_save.label.set_text('¡Guardado con Éxito!')
+        figura.canvas.draw_idle()
+
+    btn_reset.on_clicked(accion_reset)
+    btn_eq.on_clicked(accion_ecualizar)
+    btn_gauss.on_clicked(accion_gaussiano)
+    btn_bimodal.on_clicked(accion_bimodal)
+    btn_save.on_clicked(accion_guardar)
+
+    # Inicializar vista con los valores por defecto
     actualizar()
 
     plt.show()
