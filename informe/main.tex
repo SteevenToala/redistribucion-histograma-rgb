@@ -1,0 +1,467 @@
+\documentclass{article}
+
+% =========================================================
+% CONFIGURACIÓN GENERAL Y MÁRGENES
+% =========================================================
+
+\usepackage[
+    letterpaper,
+    top=2cm,
+    bottom=3cm,
+    left=3cm,
+    right=3cm,
+    marginparwidth=1.75cm
+]{geometry}
+
+\usepackage[spanish]{babel}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+
+% =========================================================
+% PAQUETES
+% =========================================================
+
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{graphicx}
+\usepackage{fancyhdr}
+\usepackage{tabularx}
+\usepackage{booktabs}
+\usepackage{float}
+\usepackage{caption}
+\usepackage{xcolor}
+\usepackage{listings}
+
+% =========================================================
+% CONFIGURACIÓN DE LISTINGS (CÓDIGO PYTHON)
+% =========================================================
+
+\definecolor{codegreen}{rgb}{0,0.6,0}
+\definecolor{codegray}{rgb}{0.5,0.5,0.5}
+\definecolor{codepurple}{rgb}{0.58,0,0.82}
+\definecolor{backcolour}{rgb}{0.96,0.96,0.96}
+
+\lstdefinestyle{mystyle}{
+    backgroundcolor=\color{backcolour},   
+    commentstyle=\color{codegreen},
+    keywordstyle=\color{magenta},
+    numberstyle=\tiny\color{codegray},
+    stringstyle=\color{codepurple},
+    basicstyle=\ttfamily\footnotesize,
+    breakatwhitespace=false,         
+    breaklines=true,                 
+    captionpos=b,                    
+    keepspaces=true,                 
+    numbers=left,                    
+    numbersep=5pt,                  
+    showspaces=false,                
+    showstringspaces=false,
+    showtabs=false,                  
+    tabsize=4
+}
+\lstset{style=mystyle}
+
+% =========================================================
+% REFERENCIAS BIBLIOGRÁFICAS
+% =========================================================
+
+\usepackage[
+    backend=biber,
+    style=ieee,
+    sorting=none
+]{biblatex}
+
+\addbibresource{referencias.bib}
+
+% =========================================================
+% HIPERVÍNCULOS
+% =========================================================
+
+\usepackage[
+    colorlinks=true,
+    allcolors=blue
+]{hyperref}
+
+% =========================================================
+% ENCABEZADO Y PIE DE PÁGINA
+% =========================================================
+
+\pagestyle{fancy}
+\fancyhf{}
+
+\setlength{\headheight}{70pt}
+
+\fancyhead[C]{%
+    \begin{minipage}[c]{2.5cm}
+        \centering
+        \includegraphics[width=2.2cm]{imagenes/uta.png}
+    \end{minipage}%
+    \hfill
+    \begin{minipage}[c]{8cm}
+        \centering
+        \small{\textbf{UNIVERSIDAD TÉCNICA DE AMBATO}}\\[0.1cm]
+        \scriptsize{\textit{FACULTAD DE INGENIERÍA EN SISTEMAS, ELECTRÓNICA E INDUSTRIAL}}\\[0.1cm]
+        \scriptsize{\textbf{CARRERA DE SOFTWARE}}\\[0.1cm]
+        \scriptsize{\textbf{CICLO ACADÉMICO: JULIO -- DICIEMBRE 2026}}
+    \end{minipage}%
+    \hfill
+    \begin{minipage}[c]{2.5cm}
+        \centering
+        \includegraphics[width=2.2cm]{imagenes/fisei.png}
+    \end{minipage}%
+}
+
+\fancyfoot[C]{\thepage}
+
+% =========================================================
+% DOCUMENTO
+% =========================================================
+
+\begin{document}
+
+% =========================================================
+% PORTADA
+% =========================================================
+
+\begin{titlepage}
+
+    \thispagestyle{empty}
+
+    \begin{center}
+
+        \vspace*{0.5cm}
+
+        \includegraphics[width=4cm]{imagenes/uta.png}
+
+        \vspace{0.7cm}
+
+        {\Large \textbf{UNIVERSIDAD TÉCNICA DE AMBATO}}
+
+        \vspace{0.35cm}
+
+        {\large
+        FACULTAD DE INGENIERÍA EN SISTEMAS,\\
+        ELECTRÓNICA E INDUSTRIAL}
+
+        \vspace{0.35cm}
+
+        {\large \textbf{CARRERA DE SOFTWARE}}
+
+        {\large
+        \vspace{1.5cm}
+        \textbf{Tema:}\\
+        REDISTRIBUCIÓN MANUAL DE HISTOGRAMAS RGB Y CONTROL INTERACTIVO MEDIANTE SLIDERS EN PYTHON
+
+        \vspace{0.45cm}
+
+        \textbf{Unidad de Organización Curricular:}\\
+        Profesional
+
+        \vspace{0.45cm}
+
+        \textbf{Nivel y Paralelo:}\\
+        7mo -- A
+
+        \vspace{0.45cm}
+
+        \textbf{Asignatura:}\\
+        Inteligencia Artificial
+
+        \vspace{0.45cm}
+
+        \textbf{Docente:}\\
+        Ing. Mg. Ruben Nogales
+
+        \vspace{0.45cm}
+
+        \textbf{Alumnos participantes:}\\
+        Toala Steeven\\
+        Chavez Michael
+
+        }
+
+        \vfill
+
+        {\large
+        Ambato -- Ecuador\\
+        Octubre de 2026
+        }
+
+    \end{center}
+
+\end{titlepage}
+
+% =========================================================
+% ÍNDICE
+% =========================================================
+
+\pagenumbering{roman}
+
+\tableofcontents
+
+\newpage
+
+\pagenumbering{arabic}
+
+% =========================================================
+% 1. INTRODUCCIÓN Y DEFINICIÓN DEL PROBLEMA
+% =========================================================
+
+\section{Introducción y Definición del Problema}
+
+En el área de la \textbf{Inteligencia Artificial} y la \textbf{Visión por Computador}, el procesamiento y acondicionamiento inicial de imágenes constituye una etapa crítica de preprocesamiento. La distribución de intensidades lumínicas en cada canal cromático condiciona directamente la detectabilidad de patrones, la extracción de características y el desempeño de modelos de aprendizaje automático y segmentación visual. Con frecuencia, las imágenes capturadas por sensores ópticos presentan histogramas comprimidos en rangos angostos o con desbalances lumínicos severos entre componentes cromáticas.
+
+En los sistemas de visión artificial, la redistribución de histograma busca encontrar una función de transformación monotónica creciente que maximice el aprovechamiento del rango dinámico disponible $[0, L-1]$ (con $L = 256$ para 8 bits por canal). En el dominio digital discreto, la transformación debe respetar estrictamente el principio de \textbf{operación de punto} (\textit{Point Operation}):
+\begin{equation}
+    s = T(r)
+\end{equation}
+donde todos los píxeles que comparten una misma intensidad original $r$ deben transformarse determinísticamente a la misma intensidad de salida $s$, preservando la coherencia espacial y física de la escena sin introducir ruido estocástico o distorsiones artificiales \cite{gonzalez2018digital}.
+
+Los objetivos planteados para la presente práctica son:
+\begin{enumerate}
+    \item Implementar de forma manual el algoritmo de redistribución de histograma en Python mediante tablas de correspondencia (\textit{Look-Up Table} o LUT), prescindiendo de cajas negras como \texttt{cv2.equalizeHist} o comandos empaquetados.
+    \item Normalizar la transformación mediante $CDF_{\min}$ para garantizar la expansión rigurosa en todo el espectro disponible $[0, 255]$ según el modelo matemático clásico de procesamiento de imágenes.
+    \item Desarrollar una interfaz gráfica que presente histogramas reales con barras discretas (\texttt{ax.bar}), silueta de referencia fija del estado inicial y controles deslizantes (\textit{sliders}) para calibrar en tiempo real la combinación ponderada de cada canal en el espacio RGB.
+\end{enumerate}
+
+% =========================================================
+% =========================================================
+% 2. FORMULACIÓN MATEMÁTICA DE LA REDISTRIBUCIÓN
+% =========================================================
+
+\section{Formulación Matemática de la Redistribución de Histogramas}
+
+Sea una imagen digital en color compuesta por tres componentes cromáticas independientes: \textbf{Rojo ($R$)}, \textbf{Verde ($G$)} y \textbf{Azul ($B$)}. Cada canal está representado por una matriz bidimensional discreta $I(x, y)$ de dimensiones $M \times N$, donde cada elemento almacena un nivel entero de intensidad lumínica $r_k \in \{0, 1, \dots, L-1\}$, con $L = 256$ niveles posibles (desde el tono más oscuro $0$ para negro absoluto hasta el tono más claro $255$ para saturación máxima).
+
+\subsection{Frecuencias Absolutas (Histograma) y Función de Probabilidad}
+Para eliminar la notación matemática críptica y facilitar la comprensión del algoritmo, el histograma se define conceptualmente como el conteo directo de cuántos píxeles poseen cada nivel de intensidad $k$ (desde el tono más oscuro $k = 0$ hasta el tono más claro $k = 255$):
+\begin{equation}
+    \text{Conteo de píxeles}(k) = n_k = \sum_{\text{fila}=0}^{M-1} \sum_{\text{columna}=0}^{N-1} \begin{cases} 
+        1, & \text{si el píxel en }(\text{fila}, \text{columna}) \text{ tiene intensidad } k \\ 
+        0, & \text{si tiene cualquier otra intensidad} 
+    \end{cases}
+\end{equation}
+donde $M$ es el alto de la imagen y $N$ es su ancho en píxeles. Cada vez que un píxel coincide con el nivel $k$, el casillero correspondiente se incrementa en 1, tal como lo realiza en el código el arreglo \texttt{conteo\_intensidades}.
+
+A partir del conteo absoluto, la \textbf{probabilidad normalizada} $p(k)$ expresa qué porcentaje de la imagen ocupa dicho nivel de intensidad:
+\begin{equation}
+    \text{Probabilidad}(k) = p(k) = \frac{\text{Conteo de píxeles con intensidad } k}{\text{Total de píxeles de la imagen}} = \frac{n_k}{M \cdot N}
+\end{equation}
+de forma que la suma de todas las probabilidades sobre los 256 niveles posibles es exactamente igual a 1 ($100\%$ de la superficie de la imagen):
+\begin{equation}
+    \sum_{k=0}^{255} p(k) = p(0) + p(1) + \dots + p(255) = 1.0
+\end{equation}
+
+\subsection{Función de Distribución Acumulada (CDF)}
+La sigla \textbf{CDF} (\textit{Cumulative Distribution Function}) representa la \textbf{probabilidad acumulada}. Responde a la pregunta práctica: \textit{«¿Qué fracción de la foto tiene una intensidad menor o igual al nivel $k$ (es decir, tonos iguales o más oscuros que $k$)?»}. Se calcula sumando progresivamente las probabilidades desde el tono más oscuro (0) hasta el nivel actual $k$:
+\begin{equation}
+    \text{CDF}(k) = \text{Probabilidad Acumulada}(k) = \sum_{j=0}^{k} p(j)
+\end{equation}
+Desglosada término a término, la acumulación opera como una suma progresiva:
+\begin{equation}
+    \text{CDF}(k) = p(0) + p(1) + p(2) + \dots + p(k)
+\end{equation}
+Al alcanzar el tono más claro posible ($k = 255$), la función acumulada siempre alcanza el total absoluto:
+\begin{equation}
+    \text{CDF}(255) = 1.0 \quad (100\% \text{ de los píxeles de la imagen})
+\end{equation}
+Esta propiedad monotónica garantiza que ningún valor acumulado sea menor que el anterior, sirviendo como base matemática para redistribuir los tonos ordenadamente.
+
+\subsection{Transformación Normalizada y Tabla de Mapeo (LUT)}
+Para redistribuir el contraste, se expanden las intensidades activas a lo largo de todo el rango disponible $[0, 255]$. Para evitar que los colores oscuros queden flotando en valores intermedios, se detecta el primer nivel con píxeles presentes en la foto, denotado como $\text{CDF}_{\min}$ (el tono más oscuro que realmente existe en la escena). La fórmula de estiramiento se expresa en términos comprensibles como:
+\begin{equation}
+    \label{eq:lut}
+    \text{Nueva Intensidad}(k) = \text{redondear}\left( \frac{\text{CDF}(k) - \text{CDF}_{\min}}{1.0 - \text{CDF}_{\min}} \times 255 \right)
+\end{equation}
+La lógica de esta ecuación opera mediante cuatro pasos fundamentales:
+\begin{enumerate}
+    \item \textbf{Resta de $\text{CDF}_{\min}$:} Ajusta el piso de la distribución para que el tono más oscuro de la imagen se proyecte exactamente a $0$ (negro puro).
+    \item \textbf{División para $(1.0 - \text{CDF}_{\min})$:} Normaliza el intervalo dinámico real entre el tono más oscuro y el más claro en la escala unitaria $[0.0, 1.0]$.
+    \item \textbf{Multiplicación por $255$:} Escala los valores proporcionales al tono más claro disponible en pantalla ($255$).
+    \item \textbf{Función $\text{redondear}(\cdot)$:} Convierte el valor resultante al entero más cercano, dado que las intensidades numéricas en pantalla solo admiten valores enteros $\{0, 1, \dots, 255\}$.
+\end{enumerate}
+Para garantizar eficiencia computacional de orden $\mathcal{O}(M \times N)$ y evitar recalcular la fórmula en cada uno de los más de $300.000$ píxeles, los 256 resultados posibles se almacenan en una tabla de consulta directa (\textit{Look-Up Table} o LUT):
+\begin{equation}
+    \text{Píxel Resultante}(\text{fila}, \text{columna}) = \text{Tabla\_LUT}\big[\text{Píxel Original}(\text{fila}, \text{columna})\big]
+\end{equation}
+
+\subsection{Propiedad Discreta Fundamental de los Picos en la Redistribución}
+Un aspecto teórico esencial detallado por González \& Woods \cite{gonzalez2018digital} es que, en una imagen digital de 8 bits, \textbf{un histograma perfectamente plano no es físicamente posible}. Si una intensidad posee un pico elevado de píxeles (como fondos homogéneos o sombras pronunciadas), dichos píxeles son reasignados conjuntamente al nuevo nivel calculado. La redistribución no fragmenta píxeles del mismo valor; por el contrario, separa las intensidades distanciando los escalones de la tabla de transformación proporcionalmente a la masa de probabilidad de cada nivel, logrando una maximización estricta del contraste sin inventar información artificial.
+
+\subsection{Control Gradual con Sliders para cada Canal (Rojo, Verde y Azul)}
+Para brindar un control interactivo y gradual, el software permite al usuario regular mediante deslizadores (\textit{sliders}) la proporción de mezcla entre el estado original ($0\%$) y la redistribución completa ($100\%$). La fórmula de mezcla se define de manera descriptiva como:
+\begin{equation}
+    \text{Píxel Final} = (1 - \text{Ajuste}) \times \text{Píxel Original} + \text{Ajuste} \times \text{Píxel Redistribuido}
+\end{equation}
+donde $\text{Ajuste} \in [0.0, 1.0]$ es el valor del slider dividido para 100. En el espacio RGB, esta combinación lineal ponderada se aplica de forma desacoplada e independiente a cada componente cromática:
+\begin{align}
+    \text{Canal Rojo}_{\text{final}}   &= \text{redondear}\Big( (1 - \text{Ajuste}_R) \cdot \text{Rojo}_{\text{original}} + \text{Ajuste}_R \cdot \text{Rojo}_{\text{redistribuido}} \Big) \\
+    \text{Canal Verde}_{\text{final}} &= \text{redondear}\Big( (1 - \text{Ajuste}_G) \cdot \text{Verde}_{\text{original}} + \text{Ajuste}_G \cdot \text{Verde}_{\text{redistribuido}} \Big) \\
+    \text{Canal Azul}_{\text{final}}  &= \text{redondear}\Big( (1 - \text{Ajuste}_B) \cdot \text{Azul}_{\text{original}} + \text{Ajuste}_B \cdot \text{Azul}_{\text{redistribuido}} \Big)
+\end{align}
+donde $\text{Ajuste}_R$, $\text{Ajuste}_G$ y $\text{Ajuste}_B$ corresponden a los deslizadores de los canales Rojo, Verde y Azul respectivamente. Cuando un deslizador se ubica en $0.0$, el canal permanece en su estado original sin alteración; cuando se sitúa en $1.0$, se despliega la redistribución al $100\%$.
+
+\subsection{Correspondencia entre Notación Matemática y Variables del Software}
+Para favorecer la trazabilidad y comprensión del sistema, la Tabla~\ref{tab:equivalencias} detalla la correspondencia unívoca entre la notación matemática teórica del informe y las variables implementadas en el código fuente.
+
+\begin{table}[H]
+    \centering
+    \caption{Correspondencia directa entre la formulación matemática y las variables de Python}
+    \label{tab:equivalencias}
+    \small
+    \begin{tabularx}{\textwidth}{l >{\raggedright\arraybackslash}p{5.4cm} >{\raggedright\arraybackslash}X}
+        \toprule
+        \textbf{Símbolo Teórico} & \textbf{Significado Conceptual} & \textbf{Variable en Python (\texttt{main.py})} \\
+        \midrule
+        $r_k \in [0, 255]$ & Nivel de intensidad (del tono oscuro 0 al claro 255) & \texttt{nivel\_intensidad} \\
+        $h(r_k) = n_k$ & Conteo de píxeles con intensidad $r_k$ & \texttt{conteo\_intensidades} \\
+        $p(r_k)$ & Probabilidad normalizada por nivel & \texttt{probabilidad\_este\_nivel} \\
+        $CDF(r_k)$ & Probabilidad acumulada (del tono oscuro al claro) & \texttt{probabilidad\_acumulada} \\
+        $CDF_{\min}$ & Acumulada del tono más oscuro presente & \texttt{prob\_acumulada\_minima} \\
+        $s_k = T(r_k)$ & Nueva intensidad estirada de 0 a 255 & \texttt{tabla\_conversion\_intensidad} \\
+        $\alpha_R, \alpha_G, \alpha_B$ & Porcentaje de slider convertido a decimal & \texttt{ajuste\_rojo}, \texttt{ajuste\_verde}, \texttt{ajuste\_azul} \\
+        $I_R, I_G, I_B$ & Matrices bidimensionales de cada canal & \texttt{canal\_rojo}, \texttt{canal\_verde}, \texttt{canal\_azul} \\
+        \bottomrule
+    \end{tabularx}
+\end{table}
+
+% =========================================================
+% 3. IMPLEMENTACIÓN DEL ALGORITMO EN PYTHON
+% =========================================================
+
+\section{Implementación del Algoritmo en Python}
+
+El programa fue desarrollado en Python utilizando exclusivamente operaciones matriciales con \texttt{NumPy} \cite{harris2020array} y visualización interactiva con \texttt{Matplotlib} \cite{hunter2007matplotlib}. Las variables fueron nombradas de manera descriptiva y en español para maximizar la legibilidad y claridad pedagógica del código.
+
+\subsection{Código Fuente del Algoritmo}
+El siguiente bloque implementa el algoritmo determinista de redistribución por canal y la función de mezcla ponderada:
+
+\begin{lstlisting}[language=Python, caption={Función de redistribución por canal y ajuste interactivo con variables descriptivas}]
+def redistribuir_canal(canal_color):
+    alto_imagen, ancho_imagen = canal_color.shape
+    total_pixeles = alto_imagen * ancho_imagen
+
+    # 1. Contar frecuencias de cada nivel de intensidad (del tono mas oscuro 0 al mas claro 255)
+    conteo_intensidades = np.zeros(256, dtype=np.float64)
+    for fila in range(alto_imagen):
+        for columna in range(ancho_imagen):
+            nivel_intensidad_pixel = canal_color[fila, columna]
+            conteo_intensidades[nivel_intensidad_pixel] += 1.0
+
+    # 2. Calcular la probabilidad acumulada (del tono mas oscuro al mas claro)
+    probabilidad_acumulada = np.zeros(256, dtype=np.float64)
+    suma_acumulada = 0.0
+    for nivel_intensidad in range(256):
+        probabilidad_este_nivel = conteo_intensidades[nivel_intensidad] / total_pixeles
+        suma_acumulada += probabilidad_este_nivel
+        probabilidad_acumulada[nivel_intensidad] = suma_acumulada
+
+    # 3. Encontrar el nivel mas oscuro que realmente existe en la foto (intensidad mayor a 0)
+    niveles_con_pixeles = np.where(conteo_intensidades > 0)[0]
+    if len(niveles_con_pixeles) == 0:
+        return canal_color.copy()
+
+    prob_acumulada_minima = probabilidad_acumulada[niveles_con_pixeles[0]]
+    rango_probabilidad_util = 1.0 - prob_acumulada_minima if (1.0 - prob_acumulada_minima) > 0 else 1.0
+
+    # 4. Crear la tabla de conversion directa (LUT)
+    # Mapea: "intensidad anterior" -> "nueva intensidad estirada de 0 (oscuro) a 255 (claro)"
+    tabla_conversion_intensidad = np.zeros(256, dtype=np.uint8)
+    for nivel_intensidad in niveles_con_pixeles:
+        nueva_intensidad_calculada = ((probabilidad_acumulada[nivel_intensidad] - prob_acumulada_minima) / rango_probabilidad_util) * 255.0
+        tabla_conversion_intensidad[nivel_intensidad] = np.uint8(np.round(nueva_intensidad_calculada))
+
+    # 5. Asignar los nuevos niveles de intensidad a cada pixel
+    canal_redistribuido = np.zeros((alto_imagen, ancho_imagen), dtype=np.uint8)
+    for fila in range(alto_imagen):
+        for columna in range(ancho_imagen):
+            canal_redistribuido[fila, columna] = tabla_conversion_intensidad[canal_color[fila, columna]]
+
+    return canal_redistribuido
+
+def aplicar_nivel_ajuste(canal_original, canal_redistribuido, porcentaje_ajuste_decimal):
+    if porcentaje_ajuste_decimal <= 0.0:
+        return canal_original.copy()
+    if porcentaje_ajuste_decimal >= 1.0:
+        return canal_redistribuido.copy()
+    mezcla_pixeles = ((1.0 - porcentaje_ajuste_decimal) * canal_original.astype(np.float64) +
+                      porcentaje_ajuste_decimal * canal_redistribuido.astype(np.float64))
+    return np.clip(np.round(mezcla_pixeles), 0, 255).astype(np.uint8)
+\end{lstlisting}
+
+\subsection{Estructura de la Interfaz con Histograma Inicial y Sliders}
+La arquitectura gráfica implementa una grilla de dos niveles mediante \texttt{GridSpec}:
+\begin{itemize}
+    \item \textbf{Fila 1 (Histogramas con Estado Inicial y Sliders):} Presenta los histogramas discretos (\texttt{ax.bar}) para Rojo, Verde y Azul. La silueta gris punteada (\texttt{ax.step} y \texttt{ax.fill\_between}) mantiene visible de forma fija el histograma original como referencia comparativa. En el título de cada histograma se presenta en vivo el porcentaje de ajuste, la media y la desviación estándar (Desv, indicador de contraste). Inmediatamente debajo se ubica un control deslizante (\texttt{Slider}) para cada canal con rango $[0\%, 100\%]$ (inicializado en $0\%$), y botones inferiores para reiniciar al original (\texttt{Reiniciar (0\%)}) o aplicar al máximo (\texttt{Redistribuir (100\%)}).
+    \item \textbf{Fila 2 (Comparación de Resultados):} Muestra a gran tamaño la comparativa lado a lado entre la \textbf{Imagen Original} a la izquierda y la \textbf{Imagen Resultante} a la derecha, actualizándose en tiempo real mediante \texttt{fig.canvas.draw\_idle()}.
+\end{itemize}
+
+% =========================================================
+% 4. RESULTADOS EXPERIMENTALES Y DISCUSIÓN
+% =========================================================
+
+\section{Resultados Experimentales y Discusión}
+
+La evaluación experimental se realizó sobre la imagen de prueba (\texttt{images.jpg}) de dimensiones $682 \times 450$ píxeles, totalizando $306.900$ elementos por canal.
+
+\subsection{Análisis Cuantitativo de Intensidades}
+En la Tabla~\ref{tab:resultados} se sintetizan las métricas estadísticas obtenidas para el estado original ($0\%$), ajuste intermedio ($50\%$) y redistribución completa ($100\%$).
+
+\begin{table}[H]
+    \centering
+    \caption{Comparación cuantitativa de medias de intensidad y desviación estándar ($\sigma$, contraste) por canal}
+    \label{tab:resultados}
+    \small
+    \begin{tabularx}{\textwidth}{l *{6}{>{\centering\arraybackslash}X}}
+        \toprule
+        \textbf{Canal} & \textbf{Media Orig.} & \textbf{$\sigma$ Orig.} & \textbf{Media 50\%} & \textbf{$\sigma$ 50\%} & \textbf{Media 100\%} & \textbf{$\sigma$ 100\%} \\
+        \midrule
+        Rojo ($R$)   & $162.97$ & $63.06$ & $145.57$ & $68.07$ & $\mathbf{128.17}$ & $\mathbf{73.92}$ \\
+        Verde ($G$)  & $115.03$ & $53.84$ & $121.05$ & $63.86$ & $\mathbf{127.03}$ & $\mathbf{74.28}$ \\
+        Azul ($B$)   & $82.02$  & $57.06$ & $102.58$ & $66.14$ & $\mathbf{123.14}$ & $\mathbf{76.18}$ \\
+        \bottomrule
+    \end{tabularx}
+\end{table}
+
+\subsection{Discusión de Resultados y Balance de Intensidad}
+Como se aprecia en los datos cuantitativos y en la Figura~\ref{fig:resultado}:
+\begin{enumerate}
+    \item \textbf{Convergencia y Armonía Lumínica Óptima:} En la imagen original existía un marcado desbalance cromático, con una media en el canal rojo de $162.97$ frente a un canal azul de apenas $82.02$. Al aplicar el $100\%$ de la redistribución manual, las medias de los tres canales convergen prácticamente al centro ideal del rango dinámico ($128.17$, $127.03$ y $123.14$), logrando un equilibrio cromático uniforme en el espacio RGB.
+    \item \textbf{Incremento Riguroso del Contraste Global:} La desviación estándar ($\sigma$), que cuantifica la dispersión tonal y riqueza de contraste, se incrementó consistentemente en todos los canales (pasando de $\approx 53 - 63$ en el original a $\approx 74 - 76$ en el estado redistribuido), demostrando la expansión efectiva de los niveles de intensidad sobre todo el espectro $[0, 255]$.
+    \item \textbf{Preservación de la Coherencia Discreta:} Se constató el comportamiento predicho por la teoría de González \& Woods: los píxeles no se fragmentan aleatoriamente, sino que los niveles se separan progresivamente, proporcionando mayor nitidez y definición de detalles sin generar artefactos espaciales espurios.
+\end{enumerate}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.98\textwidth]{imagenes/resultado_redistribucion.png}
+    \caption{Visualización del sistema en ejecución: histogramas discretos con silueta de referencia inicial y barras dinámicas (Fila 1) y comparación directa entre la imagen original y la imagen redistribuida al 100\% (Fila 2).}
+    \label{fig:resultado}
+\end{figure}
+
+% =========================================================
+% 5. CONCLUSIONES Y RECOMENDACIONES
+% =========================================================
+
+\section{Conclusiones y Recomendaciones}
+
+\subsection{Conclusiones}
+\begin{enumerate}
+    \item Se implementó de forma manual el algoritmo de redistribución de histograma mediante el cálculo de la distribución acumulada y tablas de correspondencia deterministas (LUT), validando el cumplimiento estricto del principio de operación de punto $s = T(r)$ sin recurrir a funciones cerradas de librerías comerciales.
+    \item Se comprobó empíricamente que en imágenes digitales discretas la redistribución no aplana el histograma en una línea continua, sino que redistribuye los niveles hacia el rango completo $[0, 255]$ y balancea las medias lumínicas de los tres canales hacia el centro óptimo ($\approx 127 - 128$).
+    \item La disposición visual basada en barras discretas (\texttt{ax.bar}) y controles deslizantes (\textit{sliders}) ofrece una herramienta didáctica e interactiva, permitiendo una calibración gradual y controlada del contraste en el espacio RGB.
+\end{enumerate}
+
+\subsection{Recomendaciones}
+\begin{enumerate}
+    \item Para aplicaciones de visión por computador donde se requiera preservar estrictamente la tonalidad (\textit{hue}) sin intervención manual de sliders, se sugiere evaluar la conversión a espacios descorrelacionados como HSV o CIELAB, ajustando únicamente el canal de luminancia ($V$ o $L^*$).
+    \item Explorar el comportamiento del algoritmo en imágenes médicas o multiespectrales para analizar la respuesta de la función de transferencia ante distribuciones fuertemente bimodales en tareas de clasificación con redes neuronales.
+\end{enumerate}
+
+% =========================================================
+% REFERENCIAS BIBLIOGRÁFICAS
+% =========================================================
+
+\newpage
+\printbibliography[heading=bibintoc, title={Referencias Bibliográficas}]
+
+\end{document}
