@@ -203,10 +203,10 @@ En el área de la \textbf{Inteligencia Artificial} y la \textbf{Visión por Comp
 
 En la teoría clásica de Procesamiento Digital de Imágenes (PDI) \cite{gonzalez2018digital}, el histograma representa la función de densidad de probabilidad empírica de las intensidades lumínicas. Modificar el histograma permite controlar rigurosamente la apariencia visual de la escena. Las operaciones canónicas sobre histogramas se clasifican en:
 \begin{itemize}
-    \item \textbf{Desplazamiento de Histograma (\textit{Histogram Sliding}):} Desplaza el bloque de frecuencias hacia la izquierda o derecha en el eje de intensidades, modificando el brillo global.
-    \item \textbf{Estiramiento y Compresión (\textit{Histogram Stretching / Shrinking}):} Modifica el ancho de dispersión del histograma, expandiendo o reduciendo el contraste efectivo.
-    \item \textbf{Deformación no lineal de Tonos Medios (Ley de Potencias / Corrección Gamma):} Arquea la función de transferencia para realzar sombras o luces sin recortar los extremos.
-    \item \textbf{Ecualización de Histograma (\textit{Histogram Equalization}):} Proceso determinista basado en la función de distribución acumulada (CDF) para distribuir los tonos uniformemente en todo el rango $[0, 255]$.
+    \item \textbf{Redistribución por Ventana Dinámica (\textit{Contrast Stretching}):} Proyecta un intervalo activo $[r_{\min}, r_{\max}]$ sobre la totalidad del rango dinámico $[0, 255]$, dispersando las frecuencias acumuladas.
+    \item \textbf{Estiramiento y Compresión (\textit{Histogram Stretching / Shrinking}):} Modifica el ancho de dispersión del histograma respecto al punto medio, expandiendo o reduciendo el contraste efectivo.
+    \item \textbf{Deformación no lineal de Tonos Medios (Ley de Potencias / Corrección Gamma):} Arquea la función de transferencia para redistribuir sombras o luces sin recortar los extremos.
+    \item \textbf{Ecualización de Histograma (\textit{Histogram Equalization}):} Proceso determinista basado en la función de distribución acumulada (CDF) para redistribuir los tonos uniformemente en todo el rango $[0, 255]$.
 \end{itemize}
 
 Toda transformación en este dominio debe satisfacer el principio canónico de \textbf{operación de punto} (\textit{Point Operation}):
@@ -218,8 +218,8 @@ donde todos los píxeles con intensidad original $r$ son mapeados exactamente a 
 Los objetivos de la presente práctica son:
 \begin{enumerate}
     \item Visualizar de manera simultánea e independiente los histogramas originales de los tres espectros cromáticos (Rojo, Verde y Azul) como referencia comparativa fija.
-    \item Implementar de forma manual las transformaciones canónicas directas: desplazamiento (brillo), estiramiento (contraste), curvatura Gamma y ecualización por CDF.
-    \item Proporcionar una representación gráfica interactiva que refleje en tiempo real la deformación física del histograma (altura de barras, desplazamiento de la media $\mu$ y autoescala del eje vertical).
+    \item Implementar de forma manual las transformaciones canónicas directas de redistribución: estiramiento dinámico por ventana de niveles ($r_{\min}, r_{\max}$), estiramiento de contraste ($\alpha$), curvatura Gamma ($\gamma$) y ecualización por CDF.
+    \item Proporcionar una representación gráfica interactiva que refleje en tiempo real la redistribución física del histograma (altura de barras discretas, variación de la desviación $\sigma$ y autoescala del eje vertical).
     \item Construir las tablas de consulta directa (\textit{Look-Up Tables} o LUTs) de 256 niveles con \texttt{NumPy}, asegurando interactividad a 60 FPS sin dependencias de librerías comerciales como OpenCV.
 \end{enumerate}
 
@@ -267,11 +267,17 @@ Para permitir modificar el histograma de cada espectro con total armonía y sin 
         \end{cases}
     \end{equation}
 
-    \item \textbf{Estiramiento (\textit{Stretching} / Contraste $\alpha \in [0.2, 3.0]$) y Desplazamiento (\textit{Sliding} / Brillo $\Delta \in [-120, 120]$):}
+    \item \textbf{Redistribución por Ventana Dinámica de Niveles ($r_{\min}, r_{\max}$):}
+    Expande el subintervalo de interés $[r_{\min}, r_{\max}]$ sobre la totalidad del rango dinámico $[0, 255]$:
     \begin{equation}
-        v_1(r) = \alpha \cdot (r_{\text{base}} - 128.0) + 128.0 + \Delta
+        v_0(r) = \text{recortar}\left(\frac{r_{\text{base}} - r_{\min}}{r_{\max} - r_{\min}} \times 255.0, 0.0, 255.0\right)
     \end{equation}
-    donde el factor $\alpha$ modifica el ancho de dispersión alrededor del punto medio ($128$), ensanchando o comprimiendo las frecuencias, mientras que $\Delta$ traslada físicamente la masa del histograma a lo largo del eje $[0, 255]$.
+
+    \item \textbf{Estiramiento y Compresión de Frecuencias (Contraste $\alpha \in [0.1, 3.0]$):}
+    \begin{equation}
+        v_1(r) = \alpha \cdot (v_0(r) - 128.0) + 128.0
+    \end{equation}
+    donde el factor $\alpha$ modifica el ancho de dispersión alrededor del punto medio ($128$), redistribuyendo los píxeles hacia los extremos o concentrándolos en el centro sin traslaciones rígidas aditivas.
 
     \item \textbf{Transformación Gamma (Curvatura no lineal de Medios Tonos $\gamma \in [0.2, 3.0]$):}
     Normalizando $v_1$ en el intervalo unitario $[0.0, 1.0]$:
@@ -281,7 +287,7 @@ Para permitir modificar el histograma de cada espectro con total armonía y sin 
     \begin{equation}
         s(r) = \text{recortar}\Big( \text{redondear}\big( 255.0 \cdot (v_{\text{norm}}(r))^{1 / \gamma} \big), 0, 255 \Big)
     \end{equation}
-    Esta tríada de operaciones canónicas opera de forma completamente armónica, garantizando que el brillo, el contraste y la respuesta tonal respondan predeciblemente sin anularse mutuamente.
+    Esta combinación canónica opera redistribuyendo las frecuencias en el histograma, asegurando que el contraste y la respuesta tonal respondan predeciblemente sin traslaciones forzadas.
 \end{enumerate}
 
 \subsection{Correspondencia entre Notación Matemática y Variables del Software}
@@ -292,16 +298,16 @@ La Tabla~\ref{tab:equivalencias} resume la correspondencia unívoca entre las va
     \caption{Correspondencia directa entre la formulación matemática y las variables de Python}
     \label{tab:equivalencias}
     \small
-    \begin{tabularx}{\textwidth}{l >{\raggedright\arraybackslash}p{5.4cm} >{\raggedright\arraybackslash}X}
+    \begin{tabularx}{\textwidth}{l >{\raggedright\arraybackslash}p{5.2cm} >{\raggedright\arraybackslash}X}
         \toprule
-        \textbf{Símbolo Teórico} & \textbf{Significado Conceptual} & \textbf{Variable en Python (\texttt{main.py})} \\
+        \textbf{Símbolo Teórico} & \textbf{Significado Conceptual} & \textbf{Variable en Código Python} \\
         \midrule
-        $r_k \in [0, 255]$ & Intensidad discreta de entrada & \texttt{r} \\
-        $n_k, p(k)$ & Conteo y probabilidad normalizada & \texttt{conteo}, \texttt{prob\_acumulada} \\
-        $\Delta_R, \Delta_G, \Delta_B$ & Desplazamiento horizontal por espectro & \texttt{slider\_brillo\_r}, \texttt{\_g}, \texttt{\_b} \\
-        $\alpha_R, \alpha_G, \alpha_B$ & Factor de estiramiento (contraste) & \texttt{slider\_cont\_r}, \texttt{\_g}, \texttt{\_b} \\
-        $\gamma_R, \gamma_G, \gamma_B$ & Factor de curvatura Gamma de medios tonos & \texttt{slider\_gamma\_r}, \texttt{\_g}, \texttt{\_b} \\
-        $T_{\text{eq}}(r)$ & Look-Up Table de ecualización pura por CDF & \texttt{lut\_eq\_rojo}, \texttt{\_verde}, \texttt{\_azul} \\
+        $r_k \in [0, 255]$ & Intensidad discreta de entrada & \texttt{canal}, \texttt{r\_in} \\
+        $n_k, p(k)$ & Conteo de frecuencias y probabilidad & \texttt{conteo}, \texttt{prob\_acum} \\
+        $r_{\min}, r_{\max}$ & Ventana de niveles (estiramiento de rango) & \texttt{r\_min}, \texttt{r\_max} \\
+        $\alpha$ & Factor de estiramiento de contraste & \texttt{contraste} (\texttt{cont}) \\
+        $\gamma$ & Factor de curvatura Gamma (Tonos medios) & \texttt{gamma} \\
+        $T_{\text{eq}}(r)$ & Look-Up Table de ecualización por CDF & \texttt{lut\_base}, \texttt{lut\_cdf} \\
         \bottomrule
     \end{tabularx}
 \end{table}
@@ -314,60 +320,22 @@ La Tabla~\ref{tab:equivalencias} resume la correspondencia unívoca entre las va
 
 El sistema fue desarrollado en Python utilizando exclusivamente operaciones vectorizadas con \texttt{NumPy} \cite{harris2020array} y visualización interactiva con \texttt{Matplotlib} \cite{hunter2007matplotlib}.
 
-\subsection{Funciones Principales del Módulo de Procesamiento}
-A continuación se presentan las funciones fundamentales encargadas de construir las Look-Up Tables manuales para ecualización y transformación canónica:
-
-\begin{lstlisting}[language=Python, caption={Cálculo manual de LUTs para ecualización acumulativa y transformaciones canónicas de histograma}]
-def calcular_lut_ecualizacion(canal):
-    alto, ancho = canal.shape
-    total_pixeles = alto * ancho
-    conteo = np.bincount(canal.ravel(), minlength=256).astype(np.float64)
-    prob_acumulada = np.cumsum(conteo) / total_pixeles
-
-    niveles_activos = np.where(conteo > 0)[0]
-    if len(niveles_activos) == 0:
-        return np.arange(256, dtype=np.uint8)
-
-    cdf_min = prob_acumulada[niveles_activos[0]]
-    rango_util = 1.0 - cdf_min if (1.0 - cdf_min) > 0 else 1.0
-
-    lut_eq = np.zeros(256, dtype=np.uint8)
-    for k in range(256):
-        if k >= niveles_activos[0]:
-            nueva_int = ((prob_acumulada[k] - cdf_min) / rango_util) * 255.0
-            lut_eq[k] = np.uint8(np.clip(np.round(nueva_int), 0, 255))
-    return lut_eq
-
-def generar_lut_canal(desplazamiento, contraste, gamma, usar_ecualizacion, lut_eq_base):
-    # Base: canal original o ecualizado segun el modo activo
-    if usar_ecualizacion:
-        r_base = lut_eq_base.astype(np.float64)
-    else:
-        r_base = np.arange(256, dtype=np.float64)
-
-    # 1. Contraste (estiramiento) y Desplazamiento (brillo)
-    v1 = contraste * (r_base - 128.0) + 128.0 + desplazamiento
-
-    # 2. Curvatura Gamma no lineal sobre tonos medios
-    v_norm = np.clip(v1 / 255.0, 0.0, 1.0)
-    v2 = 255.0 * (v_norm ** (1.0 / max(gamma, 0.05)))
-
-    return np.clip(np.round(v2), 0, 255).astype(np.uint8)
-\end{lstlisting}
-
-\subsection{Estructura Arquitectónica de la Interfaz Gráfica}
-La interfaz gráfica se organiza con una distribución ergonómica, limpia y canónica:
+\subsection{Metodología Algorítmica y Operaciones Vectorizadas}
+El procesamiento se fundamenta en un flujo de transformación determinista sin código iterativo anidado sobre píxeles, estructurado en cuatro fases matemáticas mediante tablas de consulta (\textit{Look-Up Tables}):
 \begin{enumerate}
-    \item \textbf{Zona Superior (Visualizador Comparativo de Imágenes):} Dispone lado a lado la \textbf{Imagen Original} ($M \times N$ px) y la \textbf{Imagen Modificada Resultante}. El título del visor resultante informa dinámicamente si la imagen se encuentra en estado base original, ecualizada por CDF o combinada con ajustes manuales.
-    \item \textbf{Zona Media (Histogramas Limpios por Espectro con Autoescala Dinámica):} Presenta los gráficos de frecuencia para Rojo, Verde y Azul con fondo limpio y sin elementos intrusivos. La silueta gris punteada (\texttt{Original}) mantiene visible el estado de partida como referencia fija. Las barras coloreadas dinámicas reflejan la nueva distribución en tiempo real, mientras que las métricas estadísticas de media ($\mu$) y desviación ($\sigma$) se calculan en vivo en el encabezado. El eje vertical se auto-escala dinámicamente para que la campana del histograma nunca se recorte ni se aplaste.
-    \item \textbf{Zona Inferior-Media (Tríada Canónica de Deslizadores Alineados):} Cada canal dispone de 3 controles deslizantes (\textit{sliders}) situados directamente debajo de su respectivo histograma: Desplazamiento (Brillo / Offset $\Delta$), Contraste (Estiramiento $\alpha$) y Gamma (Curvatura no lineal $\gamma$).
-    \item \textbf{Zona Inferior (Botonera de Control del Flujo de Trabajo):}
-    \begin{itemize}
-        \item \textbf{Importar Imagen:} Despliega un explorador de archivos nativo del sistema operativo (\texttt{tkinter.filedialog}) que permite cargar cualquier imagen (\texttt{.jpg}, \texttt{.png}, \texttt{.bmp}, \texttt{.webp}, etc.), recalculando automáticamente las dimensiones, matrices espectrales y referencias.
-        \item \textbf{Modo Ecualización CDF (ON / OFF):} Pulsador de estado con retroalimentación visual inmediata (resaltado en verde azulado con etiqueta \texttt{[ACTIVO]} al habilitarse) que commuta entre la base de frecuencias acumuladas y la distribución original.
-        \item \textbf{Restablecer Todo:} Restaura instantáneamente todos los deslizadores a sus valores neutros ($\Delta=0, \alpha=1.0, \gamma=1.0$).
-        \item \textbf{Exportar Imagen:} Permite guardar la imagen resultante procesada en el disco local en formato PNG o JPEG de alta fidelidad, indicando la confirmación de guardado mediante una etiqueta de éxito.
-    \end{itemize}
+    \item \textbf{Cálculo del Histograma y Probabilidad Acumulada:} A partir de la matriz de intensidades de cada canal, se extrae el vector de frecuencias discretas mediante histograma unidimensional de 256 contenedores, normalizando la suma acumulativa para obtener la función $\text{CDF}(r)$.
+    \item \textbf{Normalización y Proyección del Rango Activo:} Se identifica el nivel mínimo no nulo $\text{CDF}_{\min}$ y se redistribuyen las probabilidades en el rango entero $[0, 255]$, obteniendo la tabla de correspondencia de ecualización canónica.
+    \item \textbf{Mapeo Compuesto de Transformaciones de Punto:} Sobre la distribución seleccionada (original o ecualizada), se evalúan de forma vectorizada las expresiones de ventana de niveles ($r_{\min}, r_{\max}$), estiramiento ($\alpha$) y corrección Gamma ($\gamma$).
+    \item \textbf{Indexación Directa en Memoria $O(1)$:} Una vez sintetizada la tabla de 256 valores mapeados, la imagen resultante se genera mediante indexación directa sobre los píxeles originales ($I_{\text{mod}} = \text{LUT}[I_{\text{orig}}]$), logrando tiempos de procesamiento de apenas $14$ milisegundos a 60 cuadros por segundo.
+\end{enumerate}
+
+\subsection{Estructura Arquitectónica y Ergonomía del Sistema}
+El software se estructura bajo un desacoplamiento estricto entre el motor de cálculo matemático (\texttt{transformaciones.py}) y la capa de presentación interactiva (\texttt{app.py} y \texttt{main.py}), garantizando visualización simultánea en una sola pantalla sin necesidad de desplazamiento vertical:
+\begin{enumerate}
+    \item \textbf{Visor Comparativo Superior:} Dispone de forma paralela la \textbf{Imagen Original} ($682 \times 450$ px) y la \textbf{Imagen Modificada Resultante}, permitiendo contrastar de inmediato el impacto visual de las transformaciones.
+    \item \textbf{Banco Central de 3 Histogramas en Columnas:} Presenta los histogramas de Rojo, Verde y Azul con fondo blanco cartesiano, ejes numéricos graduados en $X$ e $Y$ ($0$ a $255$), cuadrícula tenue punteada, silueta fija de partida y cálculo en vivo de la media ($\mu$) y desviación ($\sigma$).
+    \item \textbf{Controles Canónicos de PDI:} Cada canal dispone de ajuste de estiramiento ($\alpha$ / Contraste), ventana de niveles ($r_{\min}, r_{\max}$ con bloqueo de cruce) y curvatura Gamma ($\gamma$).
+    \item \textbf{Flujo de Operación y Persistencia:} Incluye importación nativa de cualquier imagen de disco, alternancia entre modo global y canales independientes, restablecimiento rápido y almacenamiento del resultado en la carpeta dedicada \texttt{codigo/resultados/}.
 \end{enumerate}
 
 % =========================================================
@@ -400,15 +368,15 @@ La Tabla~\ref{tab:resultados} resume las métricas estadísticas obtenidas para 
 \subsection{Discusión de Resultados}
 Como se constata en la Figura~\ref{fig:resultado}:
 \begin{enumerate}
-    \item \textbf{Visibilidad Directa de la Modificación en el Histograma:} Al mover el slider de desplazamiento, la masa del histograma se desplaza físicamente hacia las luces o sombras, actualizando inmediatamente la media numérica en el título. Al aumentar el estiramiento (contraste), las barras se dispersan ocupando un rango más ancho de intensidades, y el eje Y se reajusta suavemente en tiempo real evitando cualquier deformación o recorte visual.
-    \item \textbf{Equilibrio entre Control Manual y Ecualización:} El software permite calibrar selectivamente los espectros de forma interactiva y armónica, o converger mediante el botón de acción hacia la ecualización clásica por CDF donde las medias convergen al centro óptimo ($\approx 127$).
+    \item \textbf{Visibilidad Directa de la Modificación en el Histograma:} Al ajustar la ventana de niveles ($r_{\min}, r_{\max}$), el rango activo se redistribuye a lo largo de todo el espectro, separando las barras y expandiendo la escala. Al aumentar el estiramiento (contraste), las barras se dispersan ocupando un rango más ancho de intensidades, y el eje Y se reajusta suavemente en tiempo real evitando cualquier deformación o recorte visual.
+    \item \textbf{Equilibrio entre Control Manual y Ecualización:} El software permite calibrar selectivamente los espectros de forma interactiva y armónica, redistribuyendo las frecuencias hacia configuraciones deseadas o hacia la ecualización clásica por CDF donde las frecuencias se dispersan de manera uniforme.
     \item \textbf{Eficiencia Computacional sin Cajas Negras:} La indexación directa mediante Look-Up Tables de 256 elementos ($I_{\text{mod}} = \text{LUT}[I_{\text{orig}}]$) toma menos de $0.8$ ms por cuadro, garantizando interactividad fluida a 60 cuadros por segundo sin latencia perceptible.
 \end{enumerate}
 
 \begin{figure}[H]
     \centering
     \includegraphics[width=0.98\textwidth]{imagenes/resultado_redistribucion.png}
-    \caption{Visualización del sistema canónico en ejecución: imágenes comparativas original y modificada (Fila superior), histogramas limpios por espectro con silueta original fija y autoescala vertical (Centro), banco de 3 controles deslizantes dedicados por canal cromático y botonera ergonómica de importación, ecualización y exportación (Fila inferior).}
+    \caption{Visualización del sistema interactivo en ejecución: visores comparativos de imagen original y modificada (Fila superior), banco de 3 histogramas en columnas con ejes numéricos $X$/$Y$, cuadrícula cartesiana y silueta fija de partida (Centro), y controles canónicos de redistribución: estiramiento ($\alpha$), curvatura Gamma ($\gamma$) y ventana de niveles ($r_{\min}, r_{\max}$) (Fila inferior).}
     \label{fig:resultado}
 \end{figure}
 
@@ -420,7 +388,7 @@ Como se constata en la Figura~\ref{fig:resultado}:
 
 \subsection{Conclusiones}
 \begin{enumerate}
-    \item Se implementaron de forma estrictamente canónica las operaciones clásicas de procesamiento de imágenes sobre histogramas (desplazamiento, estiramiento, curvatura Gamma y ecualización por CDF), prescindiendo de cajas negras o elementos artificiales ajenos a la teoría formal de PDI.
+    \item Se implementaron de forma estrictamente canónica las operaciones clásicas de redistribución sobre histogramas (estiramiento de rango dinámico, estiramiento de contraste, curvatura Gamma y ecualización por CDF), prescindiendo de traslaciones rígidas triviales o cajas negras ajenas a la teoría formal de PDI.
     \item La inclusión de una silueta fija de referencia original y un mecanismo de autoescala en el eje vertical garantiza que cualquier alteración introducida por el usuario sea inmediatamente perceptible tanto en el histograma como en la imagen resultante sin líneas que obstruyan los datos.
     \item El desacoplamiento en tres espectros independientes (Rojo, Verde y Azul) y la separación de la ecualización como modo de partida otorgan flexibilidad total para corregir dominancias de color o expandir selectivamente el contraste por canal cromático.
 \end{enumerate}

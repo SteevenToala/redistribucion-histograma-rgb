@@ -104,9 +104,13 @@ def generar_lut_canal(desplazamiento, contraste, gamma, usar_ecualizacion, lut_e
 def main():
     # 1. Cargar la imagen inicial predeterminada
     carpeta_actual = os.path.dirname(os.path.abspath(__file__))
-    ruta_imagen = os.path.join(carpeta_actual, 'images.jpg')
-    if not os.path.exists(ruta_imagen):
-        ruta_imagen = os.path.join(carpeta_actual, 'tu_imagen.jpg')
+    posibles_rutas = [
+        os.path.join(carpeta_actual, 'imagenes', 'images.jpg'),
+        os.path.join(carpeta_actual, 'images.jpg'),
+        os.path.join(carpeta_actual, 'imagenes', 'tu_imagen.jpg'),
+        os.path.join(carpeta_actual, 'tu_imagen.jpg')
+    ]
+    ruta_imagen = next((r for r in posibles_rutas if os.path.exists(r)), posibles_rutas[0])
 
     imagen_pil = Image.open(ruta_imagen).convert('RGB')
     matriz_original = np.array(imagen_pil)
