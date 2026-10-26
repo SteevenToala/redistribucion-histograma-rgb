@@ -4,7 +4,9 @@ Interfaz Gráfica de Escritorio (PDI Desktop)
 Configuración y Redistribución de Histogramas RGB.
 Arquitectura unificada en pantalla completa (sin duplicidad de controles),
 con 3 columnas por espectro cromático (R, G, B), banco de 6 histogramas,
-controles de redistribución integrados y zoom de inspección por casilleros.
+rectángulos discretos bien definidos, indicador numérico de picos máximos,
+inspector interactivo de píxeles por nivel al pasar el mouse (hover),
+zoom de inspección por casilleros y tabla completa de frecuencias 0–255.
 """
 
 import os
@@ -19,7 +21,7 @@ import matplotlib
 matplotlib.use("TkAgg")
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
-from matplotlib.ticker import FuncFormatter
+from matplotlib.ticker import FuncFormatter, MaxNLocator
 
 import transformaciones as pdi
 import utils
@@ -28,7 +30,7 @@ DIR_ACTUAL = os.path.dirname(os.path.abspath(__file__))
 
 
 def _formatear_miles(valor: float) -> str:
-    """Formatea números enteros con punto como separador de miles (ej. 585.185)."""
+    """Formatea números con punto como separador de miles (ej. 585.185)."""
     return f"{int(round(valor)):,}".replace(",", ".")
 
 
@@ -52,12 +54,15 @@ class AplicacionHistogramasDesktop:
             'text_main': '#0f172a',
             'text_muted': '#64748b',
             'red': '#dc2626',
+            'red_edge': '#991b1b',
             'red_border': '#fca5a5',
             'red_trough': '#fee2e2',
             'green': '#16a34a',
+            'green_edge': '#166534',
             'green_border': '#86efac',
             'green_trough': '#dcfce7',
             'blue': '#2563eb',
+            'blue_edge': '#1e40af',
             'blue_border': '#93c5fd',
             'blue_trough': '#eff6ff'
         }
@@ -85,6 +90,10 @@ class AplicacionHistogramasDesktop:
         self.info_px_r = tk.StringVar(value="0 px transferidos")
         self.info_px_g = tk.StringVar(value="0 px transferidos")
         self.info_px_b = tk.StringVar(value="0 px transferidos")
+
+        # Inspector interactivo de píxeles al pasar el cursor (Hover)
+        self.texto_hint_default = "💡 Mueve el cursor sobre las barras para ver el nivel de intensidad y conteo de píxeles"
+        self.info_inspector = tk.StringVar(value=self.texto_hint_default)
 
         # Referencias de botones pill para activar/desactivar estilos
         self.btn_pills_zoom = {}
@@ -127,7 +136,7 @@ class AplicacionHistogramasDesktop:
         # 2. FILA DE IMÁGENES (Original vs Modificada)
         self._construir_fila_imagenes(contenedor_principal)
 
-        # 3. BARRA DE HERRAMIENTAS (Zoom de Inspección y Escala Y)
+        # 3. BARRA DE HERRAMIENTAS (Zoom de Inspección, Inspector en Vivo y Escala Y)
         self._construir_toolbar_zoom(contenedor_principal)
 
         # 4. FILA DE 3 COLUMNAS DE ESPECTRO (R, G, B con histogramas y sliders integrados)
@@ -179,23 +188,30 @@ class AplicacionHistogramasDesktop:
                                relief="solid", bd=1, highlightbackground=self.colores['border_dark'],
                                cursor="hand2", padx=10, pady=3,
                                activebackground="#f1f5f9", command=self._accion_cargar_imagen)
-        btn_cargar.pack(side=tk.LEFT, padx=4)
+        btn_cargar.pack(side=tk.LEFT, padx=3)
 
         # Botón Restablecer Todo (0%)
         btn_reset = tk.Button(right_box, text="🔄 Restablecer Todo (0%)", font=('Segoe UI', 9),
                               bg="#ffffff", fg=self.colores['text_main'],
                               relief="solid", bd=1, highlightbackground=self.colores['border_dark'],
-                              cursor="hand2", padx=10, pady=3,
+                              cursor="hand2", padx=9, pady=3,
                               activebackground="#f1f5f9", command=self._accion_resetear_sliders)
-        btn_reset.pack(side=tk.LEFT, padx=4)
+        btn_reset.pack(side=tk.LEFT, padx=3)
+
+        # Botón Ver Tabla 0-255 (Píxeles por Nivel)
+        btn_tabla_bins = tk.Button(right_box, text="🔢 Píxeles por Nivel (0–255)", font=('Segoe UI', 8, 'bold'),
+                                   bg="#eff6ff", fg="#2563eb", relief="solid", bd=1,
+                                   highlightbackground="#bfdbfe", cursor="hand2", padx=8, pady=3,
+                                   activebackground="#dbeafe", command=self._mostrar_modal_tabla_niveles)
+        btn_tabla_bins.pack(side=tk.LEFT, padx=3)
 
         # Botón Modal de Métricas / Conservación de Masa
-        btn_metricas = tk.Button(right_box, text="📈 Métricas / Masa", font=('Segoe UI', 8),
+        btn_metricas = tk.Button(right_box, text="📈 Conservación / Masa", font=('Segoe UI', 8),
                                  bg="#f8fafc", fg=self.colores['text_muted'],
                                  relief="solid", bd=1, highlightbackground=self.colores['border'],
                                  cursor="hand2", padx=8, pady=3,
                                  activebackground="#f1f5f9", command=self._mostrar_modal_metricas)
-        btn_metricas.pack(side=tk.LEFT, padx=4)
+        btn_metricas.pack(side=tk.LEFT, padx=3)
 
         # Botón Guardar en Resultados
         btn_guardar = tk.Button(right_box, text="💾 Guardar en Resultados", font=('Segoe UI', 9, 'bold'),
@@ -203,7 +219,7 @@ class AplicacionHistogramasDesktop:
                                 cursor="hand2", padx=12, pady=4,
                                 activebackground="#1d4ed8", activeforeground="#ffffff",
                                 command=self._accion_guardar_resultado)
-        btn_guardar.pack(side=tk.LEFT, padx=(4, 0))
+        btn_guardar.pack(side=tk.LEFT, padx=(3, 0))
 
     # =========================================================================
     # 2. FILA DE IMÁGENES COMPARATIVAS
@@ -259,7 +275,7 @@ class AplicacionHistogramasDesktop:
         self._resize_timer = self.root.after(80, self._actualizar_visores_imagenes)
 
     # =========================================================================
-    # 3. BARRA DE HERRAMIENTAS (ZOOM Y ESCALA Y)
+    # 3. BARRA DE HERRAMIENTAS (ZOOM, INSPECTOR HOVER Y ESCALA Y)
     # =========================================================================
     def _construir_toolbar_zoom(self, parent):
         toolbar = tk.Frame(parent, bg="#ffffff", bd=1, relief="solid",
@@ -300,10 +316,11 @@ class AplicacionHistogramasDesktop:
                              command=lambda: self.set_zoom_preset("todo"))
         btn_rest.pack(side=tk.LEFT, padx=2)
 
-        # --- CENTRO: Hint de Interacción ---
-        lbl_hint = tk.Label(toolbar, text="💡 Recorte y redistribución uniforme de picos • Zoom por arrastre o rueda disponible",
-                            font=('Segoe UI', 8), fg="#d97706", bg="#ffffff")
-        lbl_hint.pack(side=tk.LEFT, padx=16)
+        # --- CENTRO: Inspector Dinámico de Píxeles al pasar el mouse (Hover) ---
+        self.lbl_inspector = tk.Label(toolbar, textvariable=self.info_inspector,
+                                      font=('Segoe UI', 8, 'bold'), fg="#1e40af", bg="#eff6ff",
+                                      padx=10, pady=2, relief="solid", bd=1, highlightbackground="#bfdbfe")
+        self.lbl_inspector.pack(side=tk.LEFT, padx=12, fill=tk.X, expand=True)
 
         # --- LADO DERECHO: Escala Eje Y ---
         f_esc = tk.Frame(toolbar, bg="#ffffff")
@@ -403,11 +420,16 @@ class AplicacionHistogramasDesktop:
 
         # Figura Matplotlib con 2 subplots (Fila 0: Original, Fila 1: Modificado)
         fig = Figure(figsize=(3.9, 3.1), dpi=90, facecolor="#ffffff")
-        fig.subplots_adjust(left=0.14, right=0.96, top=0.91, bottom=0.13, hspace=0.48)
+        fig.subplots_adjust(left=0.15, right=0.96, top=0.90, bottom=0.13, hspace=0.48)
         ax_orig, ax_mod = fig.subplots(2, 1)
 
         canvas = FigureCanvasTkAgg(fig, master=card)
         canvas.get_tk_widget().grid(row=0, column=0, sticky="nsew", padx=2, pady=2)
+
+        # Conectar eventos de mouse para el Inspector en Vivo (Hover interactivo)
+        canvas.mpl_connect('motion_notify_event',
+                           lambda event, c=canal, n=nombre: self._al_mover_mouse_en_grafico(event, c, n))
+        canvas.mpl_connect('axes_leave_event', self._al_salir_mouse_de_grafico)
 
         # Pie de la columna: Slider de control y contadores
         footer = tk.Frame(card, bg="#ffffff", padx=8, pady=4)
@@ -557,6 +579,9 @@ class AplicacionHistogramasDesktop:
         if self.photo_mod:
             self.lbl_canvas_mod.config(image=self.photo_mod)
 
+    # =========================================================================
+    # RENDERIZADO DETALLADO DE HISTOGRAMAS CON RECTÁNGULOS VISIBLES
+    # =========================================================================
     def _actualizar_graficos_histogramas(self):
         if self.histogramas is None or not hasattr(self, 'axes_canales'):
             return
@@ -574,66 +599,114 @@ class AplicacionHistogramasDesktop:
 
         es_log = (self.escala_y.get() == "log")
         canales_info = [
-            ('r', "Rojo", self.colores['red'], self.redist_r.get()),
-            ('g', "Verde", self.colores['green'], self.redist_g.get()),
-            ('b', "Azul", self.colores['blue'], self.redist_b.get())
+            ('r', "Rojo", self.colores['red'], self.colores['red_edge'], self.colores['red_border'], self.redist_r.get()),
+            ('g', "Verde", self.colores['green'], self.colores['green_edge'], self.colores['green_border'], self.redist_g.get()),
+            ('b', "Azul", self.colores['blue'], self.colores['blue_edge'], self.colores['blue_border'], self.redist_b.get())
         ]
 
         bins_x = np.arange(256)
         bins_mask = (bins_x >= b_min) & (bins_x <= b_max)
         x_indices = bins_x[bins_mask]
 
-        fmt_miles = FuncFormatter(lambda x, pos: f"{int(x/1000)}k" if x >= 1000 else f"{int(x)}")
+        # Ancho de barra con espacio entre rectángulos para que sean columnas individuales visibles
+        w_barra = 0.82 if len(x_indices) > 100 else 0.72
 
-        for canal, nombre, color, pct in canales_info:
+        for canal, nombre, color, color_edge, border_card, pct in canales_info:
             ax_orig, ax_mod = self.axes_canales[canal]
             canvas = self.canvases_canales[canal]
 
-            # 1. Gráfico Histograma Original (Arriba)
-            ax_orig.clear()
             h_orig = self.histogramas['orig'][canal][bins_mask]
-            ax_orig.bar(x_indices, h_orig, color=color, width=1.0, alpha=0.90)
+            h_mod = self.histogramas['mod'][canal][bins_mask]
+
+            max_orig = float(np.max(h_orig)) if len(h_orig) > 0 else 100.0
+            max_orig = max(100.0, max_orig)
+            max_mod = float(np.max(h_mod)) if len(h_mod) > 0 else 100.0
+            max_mod = max(100.0, max_mod)
+
+            # Función de formateo adaptativo inteligente para el eje Y
+            def crear_fmt_y(max_v):
+                def fmt_fn(x, pos):
+                    if x <= 0:
+                        return "0"
+                    elif max_v < 4000:
+                        return f"{int(round(x)):,}".replace(",", ".")
+                    elif x >= 1000:
+                        val_k = x / 1000.0
+                        if val_k >= 10 or val_k.is_integer():
+                            return f"{int(round(val_k))}k"
+                        return f"{val_k:.1f}k"
+                    return f"{int(round(x))}"
+                return FuncFormatter(fmt_fn)
+
+            # -------------------------------------------------------------
+            # 1. Gráfico Histograma Original (Arriba)
+            # -------------------------------------------------------------
+            ax_orig.clear()
+            # Rectángulos discretos con bordes definidos y ancho menor a 1.0
+            ax_orig.bar(x_indices, h_orig, color=color, edgecolor=color_edge,
+                        linewidth=0.5, width=w_barra, alpha=0.92)
 
             mu_o, sig_o = self.estadisticas['orig'][canal]
-            ax_orig.set_title(f"{nombre} [ORIGINAL]", loc='left', fontsize=8, fontweight='bold', color=color, pad=3)
-            ax_orig.set_title(f"μ: {mu_o}  |  σ: {sig_o}", loc='right', fontsize=8, fontweight='bold', color=color, pad=3)
+            ax_orig.set_title(f"{nombre} [ORIGINAL]", loc='left', fontsize=8, fontweight='bold', color=color, pad=4)
+            ax_orig.set_title(f"μ: {mu_o}  |  σ: {sig_o}", loc='right', fontsize=8, fontweight='bold', color=color, pad=4)
 
-            ax_orig.set_xlim(b_min, b_max)
+            ax_orig.set_xlim(b_min - 0.5, b_max + 0.5)
             ax_orig.set_xticks([t for t in [0, 50, 100, 150, 200, 255] if b_min <= t <= b_max])
-            ax_orig.grid(True, linestyle=":", alpha=0.45)
+            ax_orig.grid(True, linestyle=":", alpha=0.5)
             ax_orig.tick_params(labelsize=7)
-            ax_orig.yaxis.set_major_formatter(fmt_miles)
+
             if es_log:
                 ax_orig.set_yscale('log')
+            else:
+                ax_orig.set_ylim(0, max_orig * 1.16)
+                ax_orig.yaxis.set_major_locator(MaxNLocator(nbins=4, integer=True))
+                ax_orig.yaxis.set_major_formatter(crear_fmt_y(max_orig))
 
-            # Badge de Orig
+            # Badge del Pico Máximo (Indica con total claridad "a dónde llega")
+            ax_orig.text(0.03, 0.90, f"Pico: {_formatear_miles(max_orig)} px",
+                         transform=ax_orig.transAxes, ha='left', va='top', fontsize=6.8, fontweight='bold',
+                         color=color, bbox=dict(boxstyle='round,pad=0.25', facecolor='#ffffff', edgecolor=border_card, alpha=0.95))
+
+            # Badge identificador de Original
             ax_orig.text(0.96, 0.90, "■ Orig", transform=ax_orig.transAxes, ha='right', va='top',
                          fontsize=6.5, color='#475569',
                          bbox=dict(boxstyle='square,pad=0.2', facecolor='#ffffff', edgecolor='#cbd5e1', alpha=0.9))
 
+            # -------------------------------------------------------------
             # 2. Gráfico Histograma Modificado (Abajo)
+            # -------------------------------------------------------------
             ax_mod.clear()
-            h_mod = self.histogramas['mod'][canal][bins_mask]
-            ax_mod.bar(x_indices, h_mod, color=color, width=1.0, alpha=0.90)
+            # Rectángulos discretos con bordes definidos y ancho menor a 1.0
+            ax_mod.bar(x_indices, h_mod, color=color, edgecolor=color_edge,
+                       linewidth=0.5, width=w_barra, alpha=0.92)
 
-            # Línea guía de umbral U(f)
+            # Línea guía de umbral dinámico de meseta U(f)
             umb = self.estadisticas['umbrales'][canal]
             if pct > 0:
                 ax_mod.axhline(y=umb, color="#f59e0b", linestyle="--", linewidth=1.2)
 
             mu_m, sig_m = self.estadisticas['mod'][canal]
-            ax_mod.set_title(f"{nombre} [MODIFICADO]", loc='left', fontsize=8, fontweight='bold', color=color, pad=3)
-            ax_mod.set_title(f"μ: {mu_m}  |  σ: {sig_m}", loc='right', fontsize=8, fontweight='bold', color=color, pad=3)
+            ax_mod.set_title(f"{nombre} [MODIFICADO]", loc='left', fontsize=8, fontweight='bold', color=color, pad=4)
+            ax_mod.set_title(f"μ: {mu_m}  |  σ: {sig_m}", loc='right', fontsize=8, fontweight='bold', color=color, pad=4)
 
-            ax_mod.set_xlim(b_min, b_max)
+            ax_mod.set_xlim(b_min - 0.5, b_max + 0.5)
             ax_mod.set_xticks([t for t in [0, 50, 100, 150, 200, 255] if b_min <= t <= b_max])
-            ax_mod.grid(True, linestyle=":", alpha=0.45)
+            ax_mod.grid(True, linestyle=":", alpha=0.5)
             ax_mod.tick_params(labelsize=7)
-            ax_mod.yaxis.set_major_formatter(fmt_miles)
+
             if es_log:
                 ax_mod.set_yscale('log')
+            else:
+                ax_mod.set_ylim(0, max_mod * 1.16)
+                ax_mod.yaxis.set_major_locator(MaxNLocator(nbins=4, integer=True))
+                ax_mod.yaxis.set_major_formatter(crear_fmt_y(max_mod))
 
-            # Badge de Mod
+            # Badge del Pico Máximo
+            ax_mod.text(0.03, 0.90, f"Pico: {_formatear_miles(max_mod)} px",
+                         transform=ax_mod.transAxes, ha='left', va='top', fontsize=6.8, fontweight='bold',
+                         color=color, bbox=dict(boxstyle='round,pad=0.25', facecolor='#ffffff', edgecolor=border_card, alpha=0.95))
+
+            # Badge identificador de Modificado
             ax_mod.text(0.96, 0.90, "■ Mod", transform=ax_mod.transAxes, ha='right', va='top',
                         fontsize=6.5, color='#475569',
                         bbox=dict(boxstyle='square,pad=0.2', facecolor='#ffffff', edgecolor='#cbd5e1', alpha=0.9))
@@ -641,7 +714,113 @@ class AplicacionHistogramasDesktop:
             canvas.draw_idle()
 
     # =========================================================================
-    # MODALES AUXILIARES (CONSERVACIÓN DE MASA Y ESPECTROS)
+    # INSPECTOR INTERACTIVO AL PASAR EL CURSOR (HOVER DE PÍXELES POR NIVEL)
+    # =========================================================================
+    def _al_mover_mouse_en_grafico(self, event, canal, nombre_canal):
+        if event.inaxes is None or event.xdata is None or self.histogramas is None or self.img_original_rgb is None:
+            return
+
+        k = int(round(event.xdata))
+        if 0 <= k <= 255:
+            px_o = int(self.histogramas['orig'][canal][k])
+            px_m = int(self.histogramas['mod'][canal][k])
+            total_px = self.img_original_rgb.shape[0] * self.img_original_rgb.shape[1]
+            pct_o = (px_o / total_px) * 100.0
+            pct_m = (px_m / total_px) * 100.0
+
+            diff = px_m - px_o
+            signo = f"+{_formatear_miles(diff)}" if diff > 0 else _formatear_miles(diff)
+
+            texto = (
+                f"🎯 Nivel de Intensidad: {k} [{nombre_canal}]  ➜  "
+                f"Original: {_formatear_miles(px_o)} px ({pct_o:.2f}%)   |   "
+                f"Modificado: {_formatear_miles(px_m)} px ({pct_m:.2f}%)   |   "
+                f"Variación: {signo} px"
+            )
+            self.info_inspector.set(texto)
+            self.lbl_inspector.config(bg="#fef3c7", fg="#92400e")  # Resaltar en ámbar activo
+
+    def _al_salir_mouse_de_grafico(self, event):
+        self.info_inspector.set(self.texto_hint_default)
+        self.lbl_inspector.config(bg="#eff6ff", fg="#1e40af")
+
+    # =========================================================================
+    # MODAL 1: TABLA COMPLETA DE PÍXELES POR NIVEL DE INTENSIDAD (0 A 255)
+    # =========================================================================
+    def _mostrar_modal_tabla_niveles(self):
+        if self.histogramas is None or self.img_original_rgb is None:
+            messagebox.showinfo("Aviso", "Primero cargue una imagen para consultar los niveles.")
+            return
+
+        modal = tk.Toplevel(self.root)
+        modal.title("Conteo Exacto de Píxeles por Nivel de Intensidad (0 a 255)")
+        modal.geometry("920x540")
+        modal.configure(bg="#ffffff")
+        modal.grab_set()
+
+        frame_top = tk.Frame(modal, bg="#ffffff", padx=16, pady=10)
+        frame_top.pack(fill=tk.X)
+
+        tk.Label(frame_top, text="Distribución de Frecuencias Absolutas por Nivel de Intensidad Discreta [0, 255]",
+                 font=('Segoe UI', 11, 'bold'), bg="#ffffff", fg=self.colores['text_main']).pack(anchor="w")
+
+        # Buscador / Filtro de niveles
+        f_buscar = tk.Frame(frame_top, bg="#ffffff")
+        f_buscar.pack(anchor="w", pady=(6, 0))
+
+        tk.Label(f_buscar, text="🔍 Filtrar Nivel:", font=('Segoe UI', 9, 'bold'), bg="#ffffff", fg="#334155").pack(side=tk.LEFT)
+        var_filtro = tk.StringVar()
+        entry_filtro = tk.Entry(f_buscar, textvariable=var_filtro, font=('Segoe UI', 9), width=10, relief="solid", bd=1)
+        entry_filtro.pack(side=tk.LEFT, padx=6)
+        tk.Label(f_buscar, text="(Escribe un número 0–255 para buscar directamente)", font=('Segoe UI', 8, 'italic'),
+                 bg="#ffffff", fg="#64748b").pack(side=tk.LEFT)
+
+        # Marco con Treeview y Scrollbar
+        frame_tabla = tk.Frame(modal, bg="#ffffff", padx=16, pady=6)
+        frame_tabla.pack(fill=tk.BOTH, expand=True)
+
+        cols = ("nivel", "r_orig", "r_mod", "g_orig", "g_mod", "b_orig", "b_mod")
+        tree = ttk.Treeview(frame_tabla, columns=cols, show="headings", height=16)
+
+        titulos = {
+            "nivel": "Nivel (k)",
+            "r_orig": "🔴 Rojo Orig (px)",
+            "r_mod": "🔴 Rojo Mod (px)",
+            "g_orig": "🟢 Verde Orig (px)",
+            "g_mod": "🟢 Verde Mod (px)",
+            "b_orig": "🔵 Azul Orig (px)",
+            "b_mod": "🔵 Azul Mod (px)"
+        }
+        for c, t in titulos.items():
+            tree.heading(c, text=t)
+            tree.column(c, anchor="center", width=120)
+
+        scrollbar = ttk.Scrollbar(frame_tabla, orient=tk.VERTICAL, command=tree.yview)
+        tree.configure(yscroll=scrollbar.set)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        # Cargar los 256 niveles
+        def llenar_tabla(filtro=""):
+            for item in tree.get_children():
+                tree.delete(item)
+            f_str = filtro.strip()
+            for k in range(256):
+                if f_str and f_str not in str(k):
+                    continue
+                r_o = _formatear_miles(self.histogramas['orig']['r'][k])
+                r_m = _formatear_miles(self.histogramas['mod']['r'][k])
+                g_o = _formatear_miles(self.histogramas['orig']['g'][k])
+                g_m = _formatear_miles(self.histogramas['mod']['g'][k])
+                b_o = _formatear_miles(self.histogramas['orig']['b'][k])
+                b_m = _formatear_miles(self.histogramas['mod']['b'][k])
+                tree.insert("", tk.END, values=(k, r_o, r_m, g_o, g_m, b_o, b_m))
+
+        llenar_tabla()
+        var_filtro.trace_add("write", lambda *args: llenar_tabla(var_filtro.get()))
+
+    # =========================================================================
+    # MODAL 2: EVALUACIÓN CUANTITATIVA Y CONSERVACIÓN DE MASA
     # =========================================================================
     def _mostrar_modal_metricas(self):
         if self.estadisticas is None:
