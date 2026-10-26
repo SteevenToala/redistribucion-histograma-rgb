@@ -6,11 +6,14 @@
 
 \usepackage[
     letterpaper,
-    top=2cm,
-    bottom=3cm,
+    top=1.8cm,
+    bottom=2.5cm,
     left=3cm,
     right=3cm,
-    marginparwidth=1.75cm
+    headheight=70pt,
+    headsep=12pt,
+    footskip=20pt,
+    includehead
 ]{geometry}
 
 \usepackage{fontawesome5}
@@ -32,7 +35,7 @@
 
 \pagestyle{fancy}
 \fancyhf{}
-\setlength{\headheight}{70pt}
+% headheight configurado en geometry
 
 % =========================================================
 % ENCABEZADO INSTITUCIONAL
@@ -80,7 +83,7 @@
     \textbf{Tema:} & Configuración de histogramas (contraste)\\
     \textbf{Unidad de Organización Curricular:} & Profesional. \\
     \textbf{Nivel y Paralelo:} & 7mo - A \\
-    \textbf{Alumnos participantes:} & Toala Camacho Steeven Santiago, Chavez Michael. \\
+    \textbf{Alumnos participantes:} & Toala Steeven, Chavez Michael. \\
     \textbf{Asignatura:} & Inteligencia Artificial\\
     \textbf{Docente:} & Ing. Mg. Ruben Nogales. \\
 \end{tabular}
@@ -99,12 +102,9 @@ Desarrollar, implementar y analizar experimentalmente un sistema computacional d
 
 \subsubsection{Específicos}
 \begin{itemize}
-    \item Cargar y acondicionar imágenes digitales matriciales en el espacio de color tridimensional RGB sin compresión destructiva.
-    \item Descomponer la matriz cromática en sus tres espectros independientes ($R$, $G$ y $B$) para su procesamiento matricial aislado.
-    \item Calcular y presentar los histogramas discretos de frecuencias absolutas para cada espectro, evaluando sus medidas estadísticas de tendencia central (media $\mu$) y dispersión (desviación estándar $\sigma$).
-    \item Formular e implementar un proceso algorítmico propio sin dependencias de cajas negras para manipular el contraste de cada canal mediante umbralización dinámica de picos y redistribución homogénea de masa excedente.
-    \item Presentar comparativamente los histogramas modificados frente a los originales y sintetizar la imagen resultante recomponiendo los tres canales procesados.
-    \item Elaborar el informe técnico formal en formato APE documentando la justificación analítica, el código fuente y la validación cuantitativa.
+    \item Cargar y acondicionar im\'agenes digitales matriciales en el espacio de color tridimensional RGB sin compresi\'on destructiva, descomponiendo la matriz crom\'atica en sus tres espectros independientes ($R$, $G$ y $B$) para su procesamiento matricial desacoplado.
+    \item Calcular y presentar los histogramas discretos de frecuencias absolutas para cada espectro crom\'atico, evaluando sus medidas estad\'isticas de tendencia central (media $\mu$), dispersi\'on (desviaci\'on est\'andar $\sigma$) y concentraci\'on de picos.
+    \item Formular e implementar un algoritmo anal\'itico propio de ecualizaci\'on por meseta y recorte de picos para redistribuir el contraste de cada canal con conservaci\'on estricta de masa de p\'ixeles, sintetizando y evaluando cuantitativamente la imagen final modificada.
 \end{itemize}
 
 \subsection{Modalidad}
