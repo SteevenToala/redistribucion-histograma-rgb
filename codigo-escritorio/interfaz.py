@@ -69,6 +69,10 @@ class AplicacionHistogramasDesktop:
         self.photo_esp_g = None
         self.photo_esp_b = None
 
+        # Referencias de botones pill para sincronizar estilo activo
+        self.btn_pills_zoom = {}
+        self.btn_pills_escala = {}
+
         # Construir estilo e interfaz
         self._configurar_estilos()
         self._construir_interfaz()
@@ -269,7 +273,7 @@ class AplicacionHistogramasDesktop:
         for val, txt in [("lineal", "Lineal"), ("log", "Logarítmica")]:
             rb = tk.Radiobutton(f_esc, text=txt, value=val, variable=self.escala_y,
                                 font=('Segoe UI', 8), bg="#ffffff", activebackground="#ffffff",
-                                command=self._actualizar_histogramas_en_pantalla)
+                                command=lambda: self.set_escala(self.escala_y.get()))
             rb.pack(side=tk.LEFT, padx=4)
 
         # Zoom / Rango de Bins
@@ -277,11 +281,11 @@ class AplicacionHistogramasDesktop:
         f_zoom.pack(fill=tk.X, padx=12, pady=4)
         tk.Label(f_zoom, text="Zoom Bins:", font=('Segoe UI', 8, 'bold'),
                  bg="#ffffff", fg="#334155").pack(side=tk.LEFT)
-        cmb_zoom = ttk.Combobox(f_zoom, textvariable=self.zoom_rango,
-                                values=["todo", "sombras", "medios", "luces"],
-                                state="readonly", width=12, font=('Segoe UI', 8))
-        cmb_zoom.pack(side=tk.RIGHT)
-        cmb_zoom.bind("<<ComboboxSelected>>", lambda e: self._actualizar_histogramas_en_pantalla())
+        self.cmb_zoom = ttk.Combobox(f_zoom, textvariable=self.zoom_rango,
+                                     values=["todo", "sombras", "medios", "luces"],
+                                     state="readonly", width=12, font=('Segoe UI', 8))
+        self.cmb_zoom.pack(side=tk.RIGHT)
+        self.cmb_zoom.bind("<<ComboboxSelected>>", lambda e: self.set_zoom_preset(self.zoom_rango.get()))
 
         # Tip Explicativo
         tip_frame = tk.Frame(parent, bg="#eff6ff", bd=1, relief="solid")
@@ -290,14 +294,15 @@ class AplicacionHistogramasDesktop:
                  font=('Segoe UI', 7), fg="#1e40af", bg="#eff6ff", justify=tk.LEFT, padx=6, pady=6).pack()
 
     def _construir_tab_general(self, parent):
-        # Contenedor vertical: Arriba las imágenes comparativas, Abajo los 6 histogramas
+        # Contenedor vertical: Arriba las imágenes comparativas, Medio toolbar zoom, Abajo los 6 histogramas
         parent.columnconfigure(0, weight=1)
-        parent.rowconfigure(0, weight=2)  # Imágenes
-        parent.rowconfigure(1, weight=3)  # Histogramas
+        parent.rowconfigure(0, weight=5)  # Imágenes
+        parent.rowconfigure(1, weight=0)  # Barra de herramientas Zoom y Escala
+        parent.rowconfigure(2, weight=6)  # Histogramas
 
-        # FILA 1: VISORES COMPARATIVOS DE IMÁGENES
+        # FILA 0: VISORES COMPARATIVOS DE IMÁGENES
         frame_visores = tk.Frame(parent, bg=self.colores['bg_app'])
-        frame_visores.grid(row=0, column=0, sticky="nsew", padx=4, pady=4)
+        frame_visores.grid(row=0, column=0, sticky="nsew", padx=4, pady=(4, 2))
         frame_visores.columnconfigure(0, weight=1)
         frame_visores.columnconfigure(1, weight=1)
         frame_visores.rowconfigure(0, weight=1)
@@ -316,10 +321,76 @@ class AplicacionHistogramasDesktop:
         self.lbl_canvas_mod = tk.Label(card_mod, bg="#0f172a")
         self.lbl_canvas_mod.pack(fill=tk.BOTH, expand=True, padx=4, pady=4)
 
+        # FILA 1: BARRA DE HERRAMIENTAS (Zoom de Inspección y Escala Eje Y)
+        toolbar_bar = tk.Frame(parent, bg="#ffffff", bd=1, relief="solid", highlightbackground="#cbd5e1", padx=8, pady=3)
+        toolbar_bar.grid(row=1, column=0, sticky="ew", padx=4, pady=2)
+
+        # 1. Grupo Zoom de Inspección (Izquierda)
+        f_zoom_group = tk.Frame(toolbar_bar, bg="#ffffff")
+        f_zoom_group.pack(side=tk.LEFT, padx=(0, 6))
+
+        lbl_zoom_title = tk.Label(f_zoom_group, text="Zoom de Inspección:", font=('Segoe UI', 9, 'bold'),
+                                  bg="#ffffff", fg="#0f172a")
+        lbl_zoom_title.pack(side=tk.LEFT, padx=(0, 6))
+
+        # Contenedor de Pills de Zoom
+        pill_container = tk.Frame(f_zoom_group, bg="#f1f5f9", bd=1, relief="solid", highlightbackground="#e2e8f0", padx=2, pady=2)
+        pill_container.pack(side=tk.LEFT, padx=(0, 6))
+
+        opciones_zoom = [
+            ("todo", "Todo (0–255)"),
+            ("sombras", "Sombras (0–85)"),
+            ("medios", "Medios (85–170)"),
+            ("luces", "Luces (170–255)")
+        ]
+
+        self.btn_pills_zoom = {}
+        for clave, texto in opciones_zoom:
+            btn = tk.Button(pill_container, text=texto, font=('Segoe UI', 8),
+                            relief="flat", bd=0, padx=8, pady=2, cursor="hand2",
+                            activebackground="#ffffff", activeforeground="#2563eb",
+                            command=lambda c=clave: self.set_zoom_preset(c))
+            btn.pack(side=tk.LEFT, padx=1)
+            self.btn_pills_zoom[clave] = btn
+
+        # Botón Restaurar Zoom
+        btn_restaurar = tk.Button(f_zoom_group, text="↺ Restaurar Zoom", font=('Segoe UI', 8),
+                                  bg="#f8fafc", fg="#0f172a", relief="solid", bd=1,
+                                  padx=8, pady=2, cursor="hand2", activebackground="#e2e8f0",
+                                  command=lambda: self.set_zoom_preset("todo"))
+        btn_restaurar.pack(side=tk.LEFT, padx=2)
+
+        # 2. Escala Eje Y (Derecha)
+        f_escala_group = tk.Frame(toolbar_bar, bg="#ffffff")
+        f_escala_group.pack(side=tk.RIGHT, padx=(6, 0))
+
+        pill_esc_container = tk.Frame(f_escala_group, bg="#f1f5f9", bd=1, relief="solid", highlightbackground="#e2e8f0", padx=2, pady=2)
+        pill_esc_container.pack(side=tk.RIGHT)
+
+        opciones_escala = [("lineal", "Lineal"), ("log", "Log-Y")]
+
+        self.btn_pills_escala = {}
+        for clave, texto in opciones_escala:
+            btn = tk.Button(pill_esc_container, text=texto, font=('Segoe UI', 8),
+                            relief="flat", bd=0, padx=8, pady=2, cursor="hand2",
+                            activebackground="#ffffff", activeforeground="#2563eb",
+                            command=lambda c=clave: self.set_escala(c))
+            btn.pack(side=tk.LEFT, padx=1)
+            self.btn_pills_escala[clave] = btn
+
+        lbl_esc_title = tk.Label(f_escala_group, text="Escala Eje Y:", font=('Segoe UI', 9, 'bold'),
+                                 bg="#ffffff", fg="#0f172a")
+        lbl_esc_title.pack(side=tk.RIGHT, padx=(0, 6))
+
+        # 3. Hint en el centro
+        lbl_hint = tk.Label(toolbar_bar, text="💡 Recorte y redistribución uniforme de picos • Bins discretos [0, 255]",
+                            font=('Segoe UI', 8, 'italic'), bg="#ffffff", fg="#64748b")
+        lbl_hint.pack(side=tk.LEFT, padx=10)
+
         # FILA 2: BANCO DE 6 HISTOGRAMAS DISCRETOS (Matplotlib Canvas)
         frame_hist = tk.LabelFrame(parent, text=" Banco de 6 Histogramas Discretos por Espectro Cromático ",
                                    font=('Segoe UI', 9, 'bold'), bg="#ffffff", bd=1)
-        frame_hist.grid(row=1, column=0, sticky="nsew", padx=4, pady=4)
+        frame_hist.grid(row=2, column=0, sticky="nsew", padx=4, pady=(2, 4))
 
         # Figura Matplotlib: 2 filas x 3 columnas
         self.fig_hist = Figure(figsize=(10, 4.2), dpi=95, facecolor="#ffffff")
@@ -328,6 +399,10 @@ class AplicacionHistogramasDesktop:
 
         self.canvas_hist = FigureCanvasTkAgg(self.fig_hist, master=frame_hist)
         self.canvas_hist.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+
+        # Inicializar estilos activos en los pills
+        self._actualizar_estilo_pills_zoom()
+        self._actualizar_estilo_pills_escala()
 
     def _construir_tab_espectros(self, parent):
         # Muestra visualmente la descomposición en los 3 canales
@@ -520,6 +595,36 @@ class AplicacionHistogramasDesktop:
         self.photo_mod, _, _ = utils.numpy_a_photoimage(self.img_modificada_rgb, max_w, max_h)
         if self.photo_mod:
             self.lbl_canvas_mod.config(image=self.photo_mod)
+
+    def set_zoom_preset(self, preset: str):
+        """Ajusta el rango de inspección del histograma y actualiza visualmente los botones pill."""
+        self.zoom_rango.set(preset)
+        if hasattr(self, 'cmb_zoom'):
+            self.cmb_zoom.set(preset)
+        self._actualizar_estilo_pills_zoom()
+        self._actualizar_histogramas_en_pantalla()
+
+    def _actualizar_estilo_pills_zoom(self):
+        activo = self.zoom_rango.get()
+        for clave, btn in self.btn_pills_zoom.items():
+            if clave == activo:
+                btn.config(bg="#ffffff", fg="#2563eb", font=('Segoe UI', 8, 'bold'), relief="solid", bd=1)
+            else:
+                btn.config(bg="#f1f5f9", fg="#334155", font=('Segoe UI', 8), relief="flat", bd=0)
+
+    def set_escala(self, escala: str):
+        """Ajusta la escala del eje Y (lineal o logarítmica) y actualiza visualmente los botones pill."""
+        self.escala_y.set(escala)
+        self._actualizar_estilo_pills_escala()
+        self._actualizar_histogramas_en_pantalla()
+
+    def _actualizar_estilo_pills_escala(self):
+        activo = self.escala_y.get()
+        for clave, btn in self.btn_pills_escala.items():
+            if clave == activo:
+                btn.config(bg="#ffffff", fg="#2563eb", font=('Segoe UI', 8, 'bold'), relief="solid", bd=1)
+            else:
+                btn.config(bg="#f1f5f9", fg="#334155", font=('Segoe UI', 8), relief="flat", bd=0)
 
     def _actualizar_histogramas_en_pantalla(self):
         if self.histogramas is None:
