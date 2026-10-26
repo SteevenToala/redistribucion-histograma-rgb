@@ -1,11 +1,10 @@
 """
-Interfaz Gráfica de Escritorio (Tkinter + Matplotlib + Pillow)
-==============================================================
-Proyecto: Configuración de Histogramas (Contraste) - PDI
-Permite cargar imágenes RGB, descomponer en sus espectros,
-presentar histogramas discretos, manipular contrastes mediante
-Plateau Histogram Equalization y visualizar imágenes e histogramas
-modificados en tiempo real.
+Interfaz Gráfica de Escritorio (PDI Desktop)
+=============================================
+Configuración y Redistribución de Histogramas RGB.
+Arquitectura unificada en pantalla completa (sin duplicidad de controles),
+con 3 columnas por espectro cromático (R, G, B), banco de 6 histogramas,
+controles de redistribución integrados y zoom de inspección por casilleros.
 """
 
 import os
@@ -20,6 +19,7 @@ import matplotlib
 matplotlib.use("TkAgg")
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from matplotlib.ticker import FuncFormatter
 
 import transformaciones as pdi
 import utils
@@ -27,25 +27,50 @@ import utils
 DIR_ACTUAL = os.path.dirname(os.path.abspath(__file__))
 
 
+def _formatear_miles(valor: float) -> str:
+    """Formatea números enteros con punto como separador de miles (ej. 585.185)."""
+    return f"{int(round(valor)):,}".replace(",", ".")
+
+
 class AplicacionHistogramasDesktop:
     def __init__(self, root: tk.Tk):
         self.root = root
-        self.root.title("Configuración de Histogramas (Contraste) - PDI Escritorio")
-        self.root.geometry("1380x880")
-        self.root.minsize(1100, 720)
+        self.root.title("Modificación y Redistribución de Histogramas RGB - PDI")
+        self.root.geometry("1400x900")
+        self.root.minsize(1120, 720)
         try:
             self.root.state('zoomed')  # Maximizar en Windows
         except Exception:
             pass
 
-        # Estado de imagen y procesamiento
+        # Paleta visual moderna
+        self.colores = {
+            'bg_app': '#f8fafc',
+            'bg_card': '#ffffff',
+            'border': '#e2e8f0',
+            'border_dark': '#cbd5e1',
+            'text_main': '#0f172a',
+            'text_muted': '#64748b',
+            'red': '#dc2626',
+            'red_border': '#fca5a5',
+            'red_trough': '#fee2e2',
+            'green': '#16a34a',
+            'green_border': '#86efac',
+            'green_trough': '#dcfce7',
+            'blue': '#2563eb',
+            'blue_border': '#93c5fd',
+            'blue_trough': '#eff6ff'
+        }
+        self.root.configure(bg=self.colores['bg_app'])
+
+        # Estado de la imagen y datos
         self.img_original_rgb = None
         self.img_modificada_rgb = None
         self.histogramas = None
         self.estadisticas = None
         self.canales_espectros = None
 
-        # Variables de control de contraste (deslizadores 0 a 100)
+        # Variables de control de contraste (deslizadores 0% a 100%)
         self.redist_r = tk.IntVar(value=60)
         self.redist_g = tk.IntVar(value=35)
         self.redist_b = tk.IntVar(value=0)
@@ -53,289 +78,205 @@ class AplicacionHistogramasDesktop:
         # Variables de visualización
         self.zoom_rango = tk.StringVar(value="todo")   # 'todo', 'sombras', 'medios', 'luces'
         self.escala_y = tk.StringVar(value="lineal")   # 'lineal', 'log'
-        self.modo_color_espectros = tk.StringVar(value="color") # 'color', 'gris'
 
-        # Metadatos dinámicos
-        self.info_dimensiones = tk.StringVar(value="Sin imagen")
-        self.info_tiempo_ms = tk.StringVar(value="0.00 ms")
-        self.info_pixeles_r = tk.StringVar(value="0 px transferidos")
-        self.info_pixeles_g = tk.StringVar(value="0 px transferidos")
-        self.info_pixeles_b = tk.StringVar(value="0 px transferidos")
+        # Variables de etiquetas informativas
+        self.info_dimensiones = tk.StringVar(value="Cargando...")
+        self.info_tiempo_ms = tk.StringVar(value="0.0 ms")
+        self.info_px_r = tk.StringVar(value="0 px transferidos")
+        self.info_px_g = tk.StringVar(value="0 px transferidos")
+        self.info_px_b = tk.StringVar(value="0 px transferidos")
+
+        # Referencias de botones pill para activar/desactivar estilos
+        self.btn_pills_zoom = {}
+        self.btn_pills_escala = {}
 
         # Referencias de imágenes PhotoImage para evitar garbage collection
         self.photo_orig = None
         self.photo_mod = None
-        self.photo_esp_r = None
-        self.photo_esp_g = None
-        self.photo_esp_b = None
+        self._resize_timer = None
 
-        # Referencias de botones pill para sincronizar estilo activo
-        self.btn_pills_zoom = {}
-        self.btn_pills_escala = {}
-
-        # Construir estilo e interfaz
-        self._configurar_estilos()
+        # Construir la interfaz completa
+        self._configurar_estilos_ttk()
         self._construir_interfaz()
 
-        # Cargar imagen de muestra inicial
+        # Cargar imagen inicial tras mostrar la ventana
         self.root.after(100, self._cargar_imagen_defecto)
 
-    def _configurar_estilos(self):
+    def _configurar_estilos_ttk(self):
         self.style = ttk.Style()
         try:
             self.style.theme_use('clam')
         except Exception:
             pass
-
-        # Paleta moderna
-        self.colores = {
-            'bg_app': '#f1f5f9',
-            'bg_card': '#ffffff',
-            'border': '#cbd5e1',
-            'text': '#0f172a',
-            'text_muted': '#475569',
-            'blue': '#2563eb',
-            'red': '#dc2626',
-            'green': '#16a34a'
-        }
-        self.root.configure(bg=self.colores['bg_app'])
-
         self.style.configure('TFrame', background=self.colores['bg_app'])
-        self.style.configure('Card.TFrame', background=self.colores['bg_card'])
-        self.style.configure('TNotebook', background=self.colores['bg_app'], borderwidth=0)
-        self.style.configure('TNotebook.Tab', font=('Segoe UI', 9, 'bold'), padding=(12, 6))
 
     def _construir_interfaz(self):
+        # Contenedor raíz con márgenes
+        contenedor_principal = tk.Frame(self.root, bg=self.colores['bg_app'])
+        contenedor_principal.pack(fill=tk.BOTH, expand=True, padx=10, pady=8)
+
+        contenedor_principal.columnconfigure(0, weight=1)
+        contenedor_principal.rowconfigure(0, weight=0)  # Encabezado (fijo)
+        contenedor_principal.rowconfigure(1, weight=3)  # Visores de Imágenes (flexible)
+        contenedor_principal.rowconfigure(2, weight=0)  # Barra de Zoom y Escala (fijo)
+        contenedor_principal.rowconfigure(3, weight=5)  # 3 Columnas de Histogramas (flexible)
+
         # 1. ENCABEZADO SUPERIOR
-        header = tk.Frame(self.root, bg="#ffffff", height=48, highlightbackground="#cbd5e1", highlightthickness=1)
-        header.pack(fill=tk.X, padx=8, pady=(6, 4))
-        header.pack_propagate(False)
+        self._construir_encabezado(contenedor_principal)
 
-        brand_frame = tk.Frame(header, bg="#ffffff")
-        brand_frame.pack(side=tk.LEFT, padx=12, pady=6)
+        # 2. FILA DE IMÁGENES (Original vs Modificada)
+        self._construir_fila_imagenes(contenedor_principal)
 
-        lbl_icono = tk.Label(brand_frame, text="📊", font=('Segoe UI', 14), bg="#ffffff")
-        lbl_icono.pack(side=tk.LEFT, padx=(0, 6))
+        # 3. BARRA DE HERRAMIENTAS (Zoom de Inspección y Escala Y)
+        self._construir_toolbar_zoom(contenedor_principal)
 
-        lbl_titulo = tk.Label(brand_frame, text="Configuración de Histogramas (Contraste) - PDI",
-                              font=('Segoe UI', 11, 'bold'), fg="#0f172a", bg="#ffffff")
+        # 4. FILA DE 3 COLUMNAS DE ESPECTRO (R, G, B con histogramas y sliders integrados)
+        self._construir_columnas_espectro(contenedor_principal)
+
+    # =========================================================================
+    # 1. ENCABEZADO SUPERIOR
+    # =========================================================================
+    def _construir_encabezado(self, parent):
+        header = tk.Frame(parent, bg="#ffffff", bd=1, relief="solid",
+                          highlightbackground=self.colores['border'], highlightthickness=1)
+        header.grid(row=0, column=0, sticky="ew", pady=(0, 6))
+
+        # --- LADO IZQUIERDO: Título, Icono y Badge de Dimensiones ---
+        left_box = tk.Frame(header, bg="#ffffff")
+        left_box.pack(side=tk.LEFT, padx=12, pady=6)
+
+        # Icono de la aplicación
+        lbl_icono = tk.Label(left_box, text="📊", font=('Segoe UI', 15), bg="#ffffff")
+        lbl_icono.pack(side=tk.LEFT, padx=(0, 8))
+
+        # Textos de título y badge
+        title_box = tk.Frame(left_box, bg="#ffffff")
+        title_box.pack(side=tk.LEFT)
+
+        row_title = tk.Frame(title_box, bg="#ffffff")
+        row_title.pack(anchor="w")
+
+        lbl_titulo = tk.Label(row_title, text="Modificación y Redistribución de Histogramas RGB",
+                              font=('Segoe UI', 11, 'bold'), fg=self.colores['text_main'], bg="#ffffff")
         lbl_titulo.pack(side=tk.LEFT)
 
-        lbl_badge_dim = tk.Label(brand_frame, textvariable=self.info_dimensiones,
-                                 font=('Consolas', 9, 'bold'), fg="#2563eb", bg="#eff6ff",
-                                 padx=8, pady=1, relief="solid", bd=1)
+        lbl_badge_dim = tk.Label(row_title, textvariable=self.info_dimensiones,
+                                 font=('Segoe UI', 8, 'bold'), fg="#2563eb", bg="#eff6ff",
+                                 padx=8, pady=1, relief="solid", bd=1, highlightbackground="#bfdbfe")
         lbl_badge_dim.pack(side=tk.LEFT, padx=10)
 
-        lbl_sub = tk.Label(header, text="Inteligencia Artificial • Procesamiento Digital de Imágenes",
-                           font=('Segoe UI', 8, 'italic'), fg="#64748b", bg="#ffffff")
-        lbl_sub.pack(side=tk.LEFT, padx=10)
+        lbl_sub = tk.Label(title_box, text="Inteligencia Artificial • Procesamiento Digital de Imágenes (PDI)",
+                           font=('Segoe UI', 8), fg=self.colores['text_muted'], bg="#ffffff")
+        lbl_sub.pack(anchor="w", pady=(1, 0))
 
-        badge_tiempo = tk.Label(header, textvariable=self.info_tiempo_ms,
-                                font=('Consolas', 9, 'bold'), fg="#15803d", bg="#dcfce7",
-                                padx=8, pady=2, relief="solid", bd=1)
-        badge_tiempo.pack(side=tk.RIGHT, padx=12)
+        # --- LADO DERECHO: Botones de Acción Globales ---
+        right_box = tk.Frame(header, bg="#ffffff")
+        right_box.pack(side=tk.RIGHT, padx=12, pady=6)
 
-        # 2. CUERPO PRINCIPAL (Split: Izquierda Controles / Derecha Visualización)
-        cuerpo = tk.Frame(self.root, bg=self.colores['bg_app'])
-        cuerpo.pack(fill=tk.BOTH, expand=True, padx=8, pady=(0, 6))
+        # Botón Cargar Imagen
+        btn_cargar = tk.Button(right_box, text="📁 Cargar Imagen", font=('Segoe UI', 9, 'bold'),
+                               bg="#ffffff", fg=self.colores['text_main'],
+                               relief="solid", bd=1, highlightbackground=self.colores['border_dark'],
+                               cursor="hand2", padx=10, pady=3,
+                               activebackground="#f1f5f9", command=self._accion_cargar_imagen)
+        btn_cargar.pack(side=tk.LEFT, padx=4)
 
-        # PANEL IZQUIERDO: CONTROLES
-        panel_ctrl = tk.Frame(cuerpo, bg="#ffffff", width=340, highlightbackground="#cbd5e1", highlightthickness=1)
-        panel_ctrl.pack(side=tk.LEFT, fill=tk.Y, padx=(0, 8))
-        panel_ctrl.pack_propagate(False)
+        # Botón Restablecer Todo (0%)
+        btn_reset = tk.Button(right_box, text="🔄 Restablecer Todo (0%)", font=('Segoe UI', 9),
+                              bg="#ffffff", fg=self.colores['text_main'],
+                              relief="solid", bd=1, highlightbackground=self.colores['border_dark'],
+                              cursor="hand2", padx=10, pady=3,
+                              activebackground="#f1f5f9", command=self._accion_resetear_sliders)
+        btn_reset.pack(side=tk.LEFT, padx=4)
 
-        self._construir_panel_controles(panel_ctrl)
+        # Botón Modal de Métricas / Conservación de Masa
+        btn_metricas = tk.Button(right_box, text="📈 Métricas / Masa", font=('Segoe UI', 8),
+                                 bg="#f8fafc", fg=self.colores['text_muted'],
+                                 relief="solid", bd=1, highlightbackground=self.colores['border'],
+                                 cursor="hand2", padx=8, pady=3,
+                                 activebackground="#f1f5f9", command=self._mostrar_modal_metricas)
+        btn_metricas.pack(side=tk.LEFT, padx=4)
 
-        # PANEL DERECHO: NOTEBOOK CON PESTAÑAS
-        self.notebook = ttk.Notebook(cuerpo)
-        self.notebook.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
+        # Botón Guardar en Resultados
+        btn_guardar = tk.Button(right_box, text="💾 Guardar en Resultados", font=('Segoe UI', 9, 'bold'),
+                                bg="#2563eb", fg="#ffffff", relief="flat", bd=0,
+                                cursor="hand2", padx=12, pady=4,
+                                activebackground="#1d4ed8", activeforeground="#ffffff",
+                                command=self._accion_guardar_resultado)
+        btn_guardar.pack(side=tk.LEFT, padx=(4, 0))
 
-        # Pestaña 1: Visor General e Histogramas
-        self.tab_general = ttk.Frame(self.notebook)
-        self.notebook.add(self.tab_general, text="  🖼️ Visor General e Histogramas  ")
-        self._construir_tab_general(self.tab_general)
+    # =========================================================================
+    # 2. FILA DE IMÁGENES COMPARATIVAS
+    # =========================================================================
+    def _construir_fila_imagenes(self, parent):
+        frame_imgs = tk.Frame(parent, bg=self.colores['bg_app'])
+        frame_imgs.grid(row=1, column=0, sticky="nsew", pady=(0, 6))
 
-        # Pestaña 2: Descomposición de Espectros
-        self.tab_espectros = ttk.Frame(self.notebook)
-        self.notebook.add(self.tab_espectros, text="  🌈 Descomposición Espectral (R, G, B)  ")
-        self._construir_tab_espectros(self.tab_espectros)
+        frame_imgs.columnconfigure(0, weight=1)
+        frame_imgs.columnconfigure(1, weight=1)
+        frame_imgs.rowconfigure(0, weight=1)
 
-        # Pestaña 3: Conservación de Masa y Métricas
-        self.tab_metricas = ttk.Frame(self.notebook)
-        self.notebook.add(self.tab_metricas, text="  📈 Métricas y Conservación de Masa  ")
-        self._construir_tab_metricas(self.tab_metricas)
+        # --- Tarjeta 1: Imagen Original ---
+        self.card_orig = tk.Frame(frame_imgs, bg="#ffffff", bd=1, relief="solid",
+                                  highlightbackground=self.colores['border'], highlightthickness=1)
+        self.card_orig.grid(row=0, column=0, sticky="nsew", padx=(0, 4))
 
-    def _construir_panel_controles(self, parent):
-        # Título de sección de acciones
-        lbl_acc = tk.Label(parent, text="Acciones de Imagen", font=('Segoe UI', 9, 'bold'),
-                           bg="#ffffff", fg="#0f172a")
-        lbl_acc.pack(anchor="w", padx=12, pady=(10, 4))
+        # Badge flotante superior izquierdo
+        badge_orig = tk.Label(self.card_orig, text="Imagen Original", font=('Segoe UI', 8, 'bold'),
+                              fg="#475569", bg="#f1f5f9", padx=8, pady=2, relief="solid", bd=1)
+        badge_orig.place(x=8, y=8)
 
-        # Botones principales
-        btn_frame = tk.Frame(parent, bg="#ffffff")
-        btn_frame.pack(fill=tk.X, padx=10, pady=2)
-
-        btn_cargar = tk.Button(btn_frame, text="📁 Cargar Imagen...", font=('Segoe UI', 9, 'bold'),
-                               bg="#2563eb", fg="#ffffff", activebackground="#1d4ed8", activeforeground="#ffffff",
-                               relief="flat", cursor="hand2", padx=8, pady=4, command=self._accion_cargar_imagen)
-        btn_cargar.pack(fill=tk.X, pady=2)
-
-        btn_defecto = tk.Button(btn_frame, text="🔄 Imagen de Muestra", font=('Segoe UI', 8),
-                                bg="#f1f5f9", fg="#334155", relief="groove", bd=1,
-                                cursor="hand2", command=self._cargar_imagen_defecto)
-        btn_defecto.pack(fill=tk.X, pady=2)
-
-        btn_reset = tk.Button(btn_frame, text="↺ Restablecer Deslizadores (0%)", font=('Segoe UI', 8),
-                              bg="#f1f5f9", fg="#334155", relief="groove", bd=1,
-                              cursor="hand2", command=self._accion_resetear_sliders)
-        btn_reset.pack(fill=tk.X, pady=2)
-
-        btn_guardar = tk.Button(btn_frame, text="💾 Guardar Imagen Modificada", font=('Segoe UI', 8, 'bold'),
-                                bg="#16a34a", fg="#ffffff", activebackground="#15803d", activeforeground="#ffffff",
-                                relief="flat", cursor="hand2", command=self._accion_guardar_resultado)
-        btn_guardar.pack(fill=tk.X, pady=(2, 6))
-
-        # Separador
-        ttk.Separator(parent, orient=tk.HORIZONTAL).pack(fill=tk.X, padx=8, pady=6)
-
-        # SLIDERS DE REDISTRIBUCIÓN POR ESPECTRO (R, G, B)
-        lbl_redist = tk.Label(parent, text="Manipulación de Contraste (PHE)",
-                              font=('Segoe UI', 9, 'bold'), bg="#ffffff", fg="#0f172a")
-        lbl_redist.pack(anchor="w", padx=12, pady=(4, 2))
-
-        # Slider Rojo
-        box_r = tk.LabelFrame(parent, text=" Espectro Rojo (R) ", font=('Segoe UI', 8, 'bold'),
-                              fg="#dc2626", bg="#ffffff", bd=1, padx=6, pady=4)
-        box_r.pack(fill=tk.X, padx=10, pady=3)
-
-        info_r_frame = tk.Frame(box_r, bg="#ffffff")
-        info_r_frame.pack(fill=tk.X)
-        self.lbl_val_r = tk.Label(info_r_frame, text="60%", font=('Consolas', 9, 'bold'),
-                                  fg="#dc2626", bg="#fef2f2", padx=4)
-        self.lbl_val_r.pack(side=tk.RIGHT)
-        tk.Label(info_r_frame, textvariable=self.info_pixeles_r, font=('Consolas', 7),
-                 fg="#64748b", bg="#ffffff").pack(side=tk.LEFT)
-
-        scale_r = tk.Scale(box_r, from_=0, to=100, orient=tk.HORIZONTAL, variable=self.redist_r,
-                           showvalue=False, bg="#ffffff", troughcolor="#cbd5e1", activebackground="#dc2626",
-                           command=lambda v: self._al_mover_slider('r', v))
-        scale_r.pack(fill=tk.X)
-
-        # Slider Verde
-        box_g = tk.LabelFrame(parent, text=" Espectro Verde (G) ", font=('Segoe UI', 8, 'bold'),
-                              fg="#16a34a", bg="#ffffff", bd=1, padx=6, pady=4)
-        box_g.pack(fill=tk.X, padx=10, pady=3)
-
-        info_g_frame = tk.Frame(box_g, bg="#ffffff")
-        info_g_frame.pack(fill=tk.X)
-        self.lbl_val_g = tk.Label(info_g_frame, text="35%", font=('Consolas', 9, 'bold'),
-                                  fg="#16a34a", bg="#f0fdf4", padx=4)
-        self.lbl_val_g.pack(side=tk.RIGHT)
-        tk.Label(info_g_frame, textvariable=self.info_pixeles_g, font=('Consolas', 7),
-                 fg="#64748b", bg="#ffffff").pack(side=tk.LEFT)
-
-        scale_g = tk.Scale(box_g, from_=0, to=100, orient=tk.HORIZONTAL, variable=self.redist_g,
-                           showvalue=False, bg="#ffffff", troughcolor="#cbd5e1", activebackground="#16a34a",
-                           command=lambda v: self._al_mover_slider('g', v))
-        scale_g.pack(fill=tk.X)
-
-        # Slider Azul
-        box_b = tk.LabelFrame(parent, text=" Espectro Azul (B) ", font=('Segoe UI', 8, 'bold'),
-                              fg="#2563eb", bg="#ffffff", bd=1, padx=6, pady=4)
-        box_b.pack(fill=tk.X, padx=10, pady=3)
-
-        info_b_frame = tk.Frame(box_b, bg="#ffffff")
-        info_b_frame.pack(fill=tk.X)
-        self.lbl_val_b = tk.Label(info_b_frame, text="0%", font=('Consolas', 9, 'bold'),
-                                  fg="#2563eb", bg="#eff6ff", padx=4)
-        self.lbl_val_b.pack(side=tk.RIGHT)
-        tk.Label(info_b_frame, textvariable=self.info_pixeles_b, font=('Consolas', 7),
-                 fg="#64748b", bg="#ffffff").pack(side=tk.LEFT)
-
-        scale_b = tk.Scale(box_b, from_=0, to=100, orient=tk.HORIZONTAL, variable=self.redist_b,
-                           showvalue=False, bg="#ffffff", troughcolor="#cbd5e1", activebackground="#2563eb",
-                           command=lambda v: self._al_mover_slider('b', v))
-        scale_b.pack(fill=tk.X)
-
-        # Separador
-        ttk.Separator(parent, orient=tk.HORIZONTAL).pack(fill=tk.X, padx=8, pady=6)
-
-        # OPCIONES DE VISUALIZACIÓN DE HISTOGRAMAS
-        lbl_vis = tk.Label(parent, text="Opciones de Gráficos", font=('Segoe UI', 9, 'bold'),
-                           bg="#ffffff", fg="#0f172a")
-        lbl_vis.pack(anchor="w", padx=12, pady=(2, 2))
-
-        # Escala Y
-        f_esc = tk.Frame(parent, bg="#ffffff")
-        f_esc.pack(fill=tk.X, padx=12, pady=2)
-        tk.Label(f_esc, text="Escala Eje Y:", font=('Segoe UI', 8, 'bold'),
-                 bg="#ffffff", fg="#334155").pack(side=tk.LEFT)
-        for val, txt in [("lineal", "Lineal"), ("log", "Logarítmica")]:
-            rb = tk.Radiobutton(f_esc, text=txt, value=val, variable=self.escala_y,
-                                font=('Segoe UI', 8), bg="#ffffff", activebackground="#ffffff",
-                                command=lambda: self.set_escala(self.escala_y.get()))
-            rb.pack(side=tk.LEFT, padx=4)
-
-        # Zoom / Rango de Bins
-        f_zoom = tk.Frame(parent, bg="#ffffff")
-        f_zoom.pack(fill=tk.X, padx=12, pady=4)
-        tk.Label(f_zoom, text="Zoom Bins:", font=('Segoe UI', 8, 'bold'),
-                 bg="#ffffff", fg="#334155").pack(side=tk.LEFT)
-        self.cmb_zoom = ttk.Combobox(f_zoom, textvariable=self.zoom_rango,
-                                     values=["todo", "sombras", "medios", "luces"],
-                                     state="readonly", width=12, font=('Segoe UI', 8))
-        self.cmb_zoom.pack(side=tk.RIGHT)
-        self.cmb_zoom.bind("<<ComboboxSelected>>", lambda e: self.set_zoom_preset(self.zoom_rango.get()))
-
-        # Tip Explicativo
-        tip_frame = tk.Frame(parent, bg="#eff6ff", bd=1, relief="solid")
-        tip_frame.pack(fill=tk.X, padx=10, pady=(10, 6))
-        tk.Label(tip_frame, text="💡 Conservación Estricta de Masa:\nCada píxel recortado de los picos se\nredistribuye a los 256 niveles uniformemente.",
-                 font=('Segoe UI', 7), fg="#1e40af", bg="#eff6ff", justify=tk.LEFT, padx=6, pady=6).pack()
-
-    def _construir_tab_general(self, parent):
-        # Contenedor vertical: Arriba las imágenes comparativas, Medio toolbar zoom, Abajo los 6 histogramas
-        parent.columnconfigure(0, weight=1)
-        parent.rowconfigure(0, weight=5)  # Imágenes
-        parent.rowconfigure(1, weight=0)  # Barra de herramientas Zoom y Escala
-        parent.rowconfigure(2, weight=6)  # Histogramas
-
-        # FILA 0: VISORES COMPARATIVOS DE IMÁGENES
-        frame_visores = tk.Frame(parent, bg=self.colores['bg_app'])
-        frame_visores.grid(row=0, column=0, sticky="nsew", padx=4, pady=(4, 2))
-        frame_visores.columnconfigure(0, weight=1)
-        frame_visores.columnconfigure(1, weight=1)
-        frame_visores.rowconfigure(0, weight=1)
-
-        # Tarjeta Imagen Original
-        card_orig = tk.LabelFrame(frame_visores, text=" Imagen Original (RGB) ",
-                                  font=('Segoe UI', 9, 'bold'), bg="#ffffff", bd=1)
-        card_orig.grid(row=0, column=0, sticky="nsew", padx=4, pady=2)
-        self.lbl_canvas_orig = tk.Label(card_orig, bg="#0f172a")
+        # Visor de la imagen original
+        self.lbl_canvas_orig = tk.Label(self.card_orig, bg="#ffffff")
         self.lbl_canvas_orig.pack(fill=tk.BOTH, expand=True, padx=4, pady=4)
 
-        # Tarjeta Imagen Modificada
-        card_mod = tk.LabelFrame(frame_visores, text=" Imagen Modificada (Contraste Redistribuido) ",
-                                 font=('Segoe UI', 9, 'bold'), bg="#ffffff", bd=1)
-        card_mod.grid(row=0, column=1, sticky="nsew", padx=4, pady=2)
-        self.lbl_canvas_mod = tk.Label(card_mod, bg="#0f172a")
+        # --- Tarjeta 2: Imagen Modificada ---
+        self.card_mod = tk.Frame(frame_imgs, bg="#ffffff", bd=1, relief="solid",
+                                 highlightbackground=self.colores['border'], highlightthickness=1)
+        self.card_mod.grid(row=0, column=1, sticky="nsew", padx=(4, 0))
+
+        # Badge flotante superior izquierdo
+        badge_mod = tk.Label(self.card_mod, text="Imagen Modificada (Redistribuida)", font=('Segoe UI', 8, 'bold'),
+                             fg="#475569", bg="#f1f5f9", padx=8, pady=2, relief="solid", bd=1)
+        badge_mod.place(x=8, y=8)
+
+        # Badge de rendimiento / latencia en la esquina inferior derecha
+        badge_perf = tk.Label(self.card_mod, textvariable=self.info_tiempo_ms,
+                              font=('Consolas', 8, 'bold'), fg="#15803d", bg="#dcfce7",
+                              padx=8, pady=2, relief="solid", bd=1)
+        badge_perf.place(relx=1.0, rely=1.0, x=-8, y=-8, anchor="se")
+
+        # Visor de la imagen modificada
+        self.lbl_canvas_mod = tk.Label(self.card_mod, bg="#ffffff")
         self.lbl_canvas_mod.pack(fill=tk.BOTH, expand=True, padx=4, pady=4)
 
-        # FILA 1: BARRA DE HERRAMIENTAS (Zoom de Inspección y Escala Eje Y)
-        toolbar_bar = tk.Frame(parent, bg="#ffffff", bd=1, relief="solid", highlightbackground="#cbd5e1", padx=8, pady=3)
-        toolbar_bar.grid(row=1, column=0, sticky="ew", padx=4, pady=2)
+        # Evento de cambio de tamaño para re-escalar fluidamente
+        self.card_orig.bind("<Configure>", self._al_redimensionar_cards)
 
-        # 1. Grupo Zoom de Inspección (Izquierda)
-        f_zoom_group = tk.Frame(toolbar_bar, bg="#ffffff")
-        f_zoom_group.pack(side=tk.LEFT, padx=(0, 6))
+    def _al_redimensionar_cards(self, event=None):
+        if self._resize_timer is not None:
+            self.root.after_cancel(self._resize_timer)
+        self._resize_timer = self.root.after(80, self._actualizar_visores_imagenes)
 
-        lbl_zoom_title = tk.Label(f_zoom_group, text="Zoom de Inspección:", font=('Segoe UI', 9, 'bold'),
-                                  bg="#ffffff", fg="#0f172a")
-        lbl_zoom_title.pack(side=tk.LEFT, padx=(0, 6))
+    # =========================================================================
+    # 3. BARRA DE HERRAMIENTAS (ZOOM Y ESCALA Y)
+    # =========================================================================
+    def _construir_toolbar_zoom(self, parent):
+        toolbar = tk.Frame(parent, bg="#ffffff", bd=1, relief="solid",
+                           highlightbackground=self.colores['border'], highlightthickness=1, padx=8, pady=3)
+        toolbar.grid(row=2, column=0, sticky="ew", pady=(0, 6))
+
+        # --- LADO IZQUIERDO: Zoom de Inspección ---
+        f_zoom = tk.Frame(toolbar, bg="#ffffff")
+        f_zoom.pack(side=tk.LEFT)
+
+        lbl_zoom = tk.Label(f_zoom, text="Zoom de Inspección:", font=('Segoe UI', 9, 'bold'),
+                            bg="#ffffff", fg=self.colores['text_main'])
+        lbl_zoom.pack(side=tk.LEFT, padx=(0, 6))
 
         # Contenedor de Pills de Zoom
-        pill_container = tk.Frame(f_zoom_group, bg="#f1f5f9", bd=1, relief="solid", highlightbackground="#e2e8f0", padx=2, pady=2)
-        pill_container.pack(side=tk.LEFT, padx=(0, 6))
+        pill_box = tk.Frame(f_zoom, bg="#f1f5f9", bd=1, relief="solid", highlightbackground="#e2e8f0", padx=2, pady=2)
+        pill_box.pack(side=tk.LEFT, padx=(0, 6))
 
         opciones_zoom = [
             ("todo", "Todo (0–255)"),
@@ -343,10 +284,9 @@ class AplicacionHistogramasDesktop:
             ("medios", "Medios (85–170)"),
             ("luces", "Luces (170–255)")
         ]
-
         self.btn_pills_zoom = {}
         for clave, texto in opciones_zoom:
-            btn = tk.Button(pill_container, text=texto, font=('Segoe UI', 8),
+            btn = tk.Button(pill_box, text=texto, font=('Segoe UI', 8),
                             relief="flat", bd=0, padx=8, pady=2, cursor="hand2",
                             activebackground="#ffffff", activeforeground="#2563eb",
                             command=lambda c=clave: self.set_zoom_preset(c))
@@ -354,134 +294,176 @@ class AplicacionHistogramasDesktop:
             self.btn_pills_zoom[clave] = btn
 
         # Botón Restaurar Zoom
-        btn_restaurar = tk.Button(f_zoom_group, text="↺ Restaurar Zoom", font=('Segoe UI', 8),
-                                  bg="#f8fafc", fg="#0f172a", relief="solid", bd=1,
-                                  padx=8, pady=2, cursor="hand2", activebackground="#e2e8f0",
-                                  command=lambda: self.set_zoom_preset("todo"))
-        btn_restaurar.pack(side=tk.LEFT, padx=2)
+        btn_rest = tk.Button(f_zoom, text="↺ Restaurar Zoom", font=('Segoe UI', 8),
+                             bg="#f8fafc", fg=self.colores['text_main'], relief="solid", bd=1,
+                             padx=8, pady=2, cursor="hand2", activebackground="#e2e8f0",
+                             command=lambda: self.set_zoom_preset("todo"))
+        btn_rest.pack(side=tk.LEFT, padx=2)
 
-        # 2. Escala Eje Y (Derecha)
-        f_escala_group = tk.Frame(toolbar_bar, bg="#ffffff")
-        f_escala_group.pack(side=tk.RIGHT, padx=(6, 0))
+        # --- CENTRO: Hint de Interacción ---
+        lbl_hint = tk.Label(toolbar, text="💡 Recorte y redistribución uniforme de picos • Zoom por arrastre o rueda disponible",
+                            font=('Segoe UI', 8), fg="#d97706", bg="#ffffff")
+        lbl_hint.pack(side=tk.LEFT, padx=16)
 
-        pill_esc_container = tk.Frame(f_escala_group, bg="#f1f5f9", bd=1, relief="solid", highlightbackground="#e2e8f0", padx=2, pady=2)
-        pill_esc_container.pack(side=tk.RIGHT)
+        # --- LADO DERECHO: Escala Eje Y ---
+        f_esc = tk.Frame(toolbar, bg="#ffffff")
+        f_esc.pack(side=tk.RIGHT)
 
-        opciones_escala = [("lineal", "Lineal"), ("log", "Log-Y")]
+        pill_esc = tk.Frame(f_esc, bg="#f1f5f9", bd=1, relief="solid", highlightbackground="#e2e8f0", padx=2, pady=2)
+        pill_esc.pack(side=tk.RIGHT)
 
+        opciones_esc = [("lineal", "Lineal"), ("log", "Log-Y")]
         self.btn_pills_escala = {}
-        for clave, texto in opciones_escala:
-            btn = tk.Button(pill_esc_container, text=texto, font=('Segoe UI', 8),
+        for clave, texto in opciones_esc:
+            btn = tk.Button(pill_esc, text=texto, font=('Segoe UI', 8),
                             relief="flat", bd=0, padx=8, pady=2, cursor="hand2",
                             activebackground="#ffffff", activeforeground="#2563eb",
                             command=lambda c=clave: self.set_escala(c))
             btn.pack(side=tk.LEFT, padx=1)
             self.btn_pills_escala[clave] = btn
 
-        lbl_esc_title = tk.Label(f_escala_group, text="Escala Eje Y:", font=('Segoe UI', 9, 'bold'),
-                                 bg="#ffffff", fg="#0f172a")
-        lbl_esc_title.pack(side=tk.RIGHT, padx=(0, 6))
+        lbl_esc = tk.Label(f_esc, text="Escala Eje Y:", font=('Segoe UI', 9, 'bold'),
+                           bg="#ffffff", fg=self.colores['text_main'])
+        lbl_esc.pack(side=tk.RIGHT, padx=(0, 6))
 
-        # 3. Hint en el centro
-        lbl_hint = tk.Label(toolbar_bar, text="💡 Recorte y redistribución uniforme de picos • Bins discretos [0, 255]",
-                            font=('Segoe UI', 8, 'italic'), bg="#ffffff", fg="#64748b")
-        lbl_hint.pack(side=tk.LEFT, padx=10)
-
-        # FILA 2: BANCO DE 6 HISTOGRAMAS DISCRETOS (Matplotlib Canvas)
-        frame_hist = tk.LabelFrame(parent, text=" Banco de 6 Histogramas Discretos por Espectro Cromático ",
-                                   font=('Segoe UI', 9, 'bold'), bg="#ffffff", bd=1)
-        frame_hist.grid(row=2, column=0, sticky="nsew", padx=4, pady=(2, 4))
-
-        # Figura Matplotlib: 2 filas x 3 columnas
-        self.fig_hist = Figure(figsize=(10, 4.2), dpi=95, facecolor="#ffffff")
-        self.fig_hist.subplots_adjust(left=0.06, right=0.98, top=0.90, bottom=0.12, wspace=0.22, hspace=0.38)
-        self.axs = self.fig_hist.subplots(2, 3)
-
-        self.canvas_hist = FigureCanvasTkAgg(self.fig_hist, master=frame_hist)
-        self.canvas_hist.get_tk_widget().pack(fill=tk.BOTH, expand=True)
-
-        # Inicializar estilos activos en los pills
+        # Estilo inicial de los pills
         self._actualizar_estilo_pills_zoom()
         self._actualizar_estilo_pills_escala()
 
-    def _construir_tab_espectros(self, parent):
-        # Muestra visualmente la descomposición en los 3 canales
-        parent.columnconfigure(0, weight=1)
-        parent.columnconfigure(1, weight=1)
-        parent.columnconfigure(2, weight=1)
-        parent.rowconfigure(0, weight=1)
+    def set_zoom_preset(self, preset: str):
+        self.zoom_rango.set(preset)
+        self._actualizar_estilo_pills_zoom()
+        self._actualizar_graficos_histogramas()
 
-        # Espectro Rojo
-        card_r = tk.LabelFrame(parent, text=" Espectro Rojo (Canal R) ",
-                               font=('Segoe UI', 9, 'bold'), fg="#dc2626", bg="#ffffff", bd=1)
-        card_r.grid(row=0, column=0, sticky="nsew", padx=4, pady=6)
-        self.lbl_esp_r = tk.Label(card_r, bg="#1e1e1e")
-        self.lbl_esp_r.pack(fill=tk.BOTH, expand=True, padx=4, pady=4)
+    def _actualizar_estilo_pills_zoom(self):
+        activo = self.zoom_rango.get()
+        for clave, btn in self.btn_pills_zoom.items():
+            if clave == activo:
+                btn.config(bg="#ffffff", fg="#2563eb", font=('Segoe UI', 8, 'bold'), relief="solid", bd=1)
+            else:
+                btn.config(bg="#f1f5f9", fg="#334155", font=('Segoe UI', 8), relief="flat", bd=0)
 
-        # Espectro Verde
-        card_g = tk.LabelFrame(parent, text=" Espectro Verde (Canal G) ",
-                               font=('Segoe UI', 9, 'bold'), fg="#16a34a", bg="#ffffff", bd=1)
-        card_g.grid(row=0, column=1, sticky="nsew", padx=4, pady=6)
-        self.lbl_esp_g = tk.Label(card_g, bg="#1e1e1e")
-        self.lbl_esp_g.pack(fill=tk.BOTH, expand=True, padx=4, pady=4)
+    def set_escala(self, escala: str):
+        self.escala_y.set(escala)
+        self._actualizar_estilo_pills_escala()
+        self._actualizar_graficos_histogramas()
 
-        # Espectro Azul
-        card_b = tk.LabelFrame(parent, text=" Espectro Azul (Canal B) ",
-                               font=('Segoe UI', 9, 'bold'), fg="#2563eb", bg="#ffffff", bd=1)
-        card_b.grid(row=0, column=2, sticky="nsew", padx=4, pady=6)
-        self.lbl_esp_b = tk.Label(card_b, bg="#1e1e1e")
-        self.lbl_esp_b.pack(fill=tk.BOTH, expand=True, padx=4, pady=4)
+    def _actualizar_estilo_pills_escala(self):
+        activo = self.escala_y.get()
+        for clave, btn in self.btn_pills_escala.items():
+            if clave == activo:
+                btn.config(bg="#ffffff", fg="#2563eb", font=('Segoe UI', 8, 'bold'), relief="solid", bd=1)
+            else:
+                btn.config(bg="#f1f5f9", fg="#334155", font=('Segoe UI', 8), relief="flat", bd=0)
 
-    def _construir_tab_metricas(self, parent):
-        # Muestra tabla y verificación de conservación de masa
-        frame_tabla = tk.Frame(parent, bg="#ffffff", padx=14, pady=12, bd=1, relief="solid")
-        frame_tabla.pack(fill=tk.BOTH, expand=True, padx=12, pady=12)
+    # =========================================================================
+    # 4. FILA DE 3 COLUMNAS DE ESPECTRO (R, G, B)
+    # =========================================================================
+    def _construir_columnas_espectro(self, parent):
+        frame_espectros = tk.Frame(parent, bg=self.colores['bg_app'])
+        frame_espectros.grid(row=3, column=0, sticky="nsew")
 
-        tk.Label(frame_tabla, text="Evaluación Cuantitativa y Conservación de Masa de Píxeles",
-                 font=('Segoe UI', 11, 'bold'), bg="#ffffff", fg="#0f172a").pack(anchor="w", pady=(0, 6))
+        frame_espectros.columnconfigure(0, weight=1)
+        frame_espectros.columnconfigure(1, weight=1)
+        frame_espectros.columnconfigure(2, weight=1)
+        frame_espectros.rowconfigure(0, weight=1)
 
-        tk.Label(frame_tabla,
-                 text="El teorema de conservación garantiza que la suma de frecuencias modificadas es idéntica a la masa original: ∑ H_mod = ∑ H_orig = M × N",
-                 font=('Segoe UI', 8, 'italic'), bg="#ffffff", fg="#64748b").pack(anchor="w", pady=(0, 10))
-
-        columnas = ("canal", "media_orig", "desv_orig", "media_mod", "desv_mod", "exceso_px", "pico_max", "masa_total", "estado")
-        self.tree_metricas = ttk.Treeview(frame_tabla, columns=columnas, show="headings", height=6)
-
-        titulos = {
-            "canal": "Espectro",
-            "media_orig": "μ Original",
-            "desv_orig": "σ Original",
-            "media_mod": "μ Modificado",
-            "desv_mod": "σ Modificado",
-            "exceso_px": "Exceso Transferido (E)",
-            "pico_max": "Pico Máx Inicial",
-            "masa_total": "Masa Total (px)",
-            "estado": "Conservación"
-        }
-        for col, txt in titulos.items():
-            self.tree_metricas.heading(col, text=txt)
-            self.tree_metricas.column(col, anchor="center", width=120)
-
-        self.tree_metricas.pack(fill=tk.X, pady=6)
-
-        # Marco con resumen teórico de variables
-        box_teoria = tk.LabelFrame(frame_tabla, text=" Fórmulas Matemáticas Implementadas en Tiempo Real ",
-                                  font=('Segoe UI', 9, 'bold'), bg="#ffffff", fg="#334155", padx=10, pady=8)
-        box_teoria.pack(fill=tk.BOTH, expand=True, pady=10)
-
-        texto_teoria = (
-            "1. Media Uniforme Teórica:     H_bar = N_total / 256\n"
-            "2. Umbral Dinámico de Meseta:  U(f) = H_max - f × (H_max - H_bar)\n"
-            "3. Píxeles Excedentes:         E = ∑ max(H_orig[k] - U(f), 0)\n"
-            "4. Redistribución Homogénea:   H_mod[k] = min(H_orig[k], U(f)) + (E / 256)\n"
-            "5. Conservación de Masa:       ∑ H_mod[k] = (N_total - E) + 256 × (E / 256) = N_total  (Sin pérdidas ni adiciones)\n"
-            "6. Tabla de Consulta (LUT):    LUT[k] = clip( (1 - f) × k + f × T_eq(k), 0, 255 )"
+        # COLUMNA ROJO (R)
+        self._construir_columna_canal(
+            parent=frame_espectros, col_idx=0, canal='r', nombre="Rojo",
+            color_hex=self.colores['red'], border_hex=self.colores['red_border'],
+            trough_hex=self.colores['red_trough'], variable_slider=self.redist_r,
+            variable_px=self.info_px_r
         )
-        tk.Label(box_teoria, text=texto_teoria, font=('Consolas', 9), bg="#ffffff", fg="#0f172a", justify=tk.LEFT).pack(anchor="w")
+
+        # COLUMNA VERDE (G)
+        self._construir_columna_canal(
+            parent=frame_espectros, col_idx=1, canal='g', nombre="Verde",
+            color_hex=self.colores['green'], border_hex=self.colores['green_border'],
+            trough_hex=self.colores['green_trough'], variable_slider=self.redist_g,
+            variable_px=self.info_px_g
+        )
+
+        # COLUMNA AZUL (B)
+        self._construir_columna_canal(
+            parent=frame_espectros, col_idx=2, canal='b', nombre="Azul",
+            color_hex=self.colores['blue'], border_hex=self.colores['blue_border'],
+            trough_hex=self.colores['blue_trough'], variable_slider=self.redist_b,
+            variable_px=self.info_px_b
+        )
+
+    def _construir_columna_canal(self, parent, col_idx, canal, nombre,
+                                color_hex, border_hex, trough_hex, variable_slider, variable_px):
+        card = tk.Frame(parent, bg="#ffffff", bd=1, relief="solid",
+                        highlightbackground=border_hex, highlightthickness=1.5)
+        card.grid(row=0, column=col_idx, sticky="nsew", padx=3, pady=2)
+        card.columnconfigure(0, weight=1)
+        card.rowconfigure(0, weight=1)  # Matplotlib Canvas (Original + Modificado)
+        card.rowconfigure(1, weight=0)  # Controles de Slider en el pie de la columna
+
+        # Figura Matplotlib con 2 subplots (Fila 0: Original, Fila 1: Modificado)
+        fig = Figure(figsize=(3.9, 3.1), dpi=90, facecolor="#ffffff")
+        fig.subplots_adjust(left=0.14, right=0.96, top=0.91, bottom=0.13, hspace=0.48)
+        ax_orig, ax_mod = fig.subplots(2, 1)
+
+        canvas = FigureCanvasTkAgg(fig, master=card)
+        canvas.get_tk_widget().grid(row=0, column=0, sticky="nsew", padx=2, pady=2)
+
+        # Pie de la columna: Slider de control y contadores
+        footer = tk.Frame(card, bg="#ffffff", padx=8, pady=4)
+        footer.grid(row=1, column=0, sticky="ew")
+
+        # Fila superior del footer: Label 'Redistribución de Picos' | px transferidos | %
+        f_info = tk.Frame(footer, bg="#ffffff")
+        f_info.pack(fill=tk.X, pady=(0, 2))
+
+        lbl_nombre_ctrl = tk.Label(f_info, text="Redistribución de Picos",
+                                   font=('Segoe UI', 8, 'bold'), fg=self.colores['text_main'], bg="#ffffff")
+        lbl_nombre_ctrl.pack(side=tk.LEFT)
+
+        lbl_pct = tk.Label(f_info, text=f"{variable_slider.get()}%",
+                           font=('Consolas', 9, 'bold'), fg=color_hex, bg="#ffffff")
+        lbl_pct.pack(side=tk.RIGHT)
+
+        lbl_px = tk.Label(f_info, textvariable=variable_px,
+                          font=('Consolas', 8), fg=self.colores['text_muted'], bg="#ffffff")
+        lbl_px.pack(side=tk.RIGHT, padx=6)
+
+        # Fila inferior del footer: Deslizador horizontal nativo
+        scale = tk.Scale(
+            footer, from_=0, to=100, orient=tk.HORIZONTAL, variable=variable_slider,
+            showvalue=False, bg="#ffffff", troughcolor=trough_hex,
+            activebackground=color_hex, highlightthickness=0, bd=1, relief="flat",
+            command=lambda v, c=canal, l=lbl_pct: self._al_mover_slider(c, v, l)
+        )
+        scale.pack(fill=tk.X)
+
+        # Guardar referencias en diccionarios de la clase
+        if not hasattr(self, 'figuras_canales'):
+            self.figuras_canales = {}
+            self.axes_canales = {}
+            self.canvases_canales = {}
+            self.labels_pct_canales = {}
+
+        self.figuras_canales[canal] = fig
+        self.axes_canales[canal] = (ax_orig, ax_mod)
+        self.canvases_canales[canal] = canvas
+        self.labels_pct_canales[canal] = lbl_pct
 
     # =========================================================================
-    # LÓGICA DE CARGA Y PROCESAMIENTO
+    # LÓGICA DE PROCESAMIENTO Y EVENTOS
     # =========================================================================
+    def _al_mover_slider(self, canal, valor, lbl_pct):
+        lbl_pct.config(text=f"{int(valor)}%")
+        self._ejecutar_procesamiento()
+
+    def _accion_resetear_sliders(self):
+        self.redist_r.set(0)
+        self.redist_g.set(0)
+        self.redist_b.set(0)
+        for k, lbl in self.labels_pct_canales.items():
+            lbl.config(text="0%")
+        self._ejecutar_procesamiento()
 
     def _cargar_imagen_defecto(self):
         candidatos = [
@@ -499,7 +481,6 @@ class AplicacionHistogramasDesktop:
         if ruta_encontrada:
             self._cargar_imagen_desde_ruta(ruta_encontrada)
         else:
-            # Crear sintética si no se encuentra
             sintetica = np.zeros((450, 682, 3), dtype=np.uint8)
             sintetica[:, :] = (180, 120, 80)
             self._establecer_imagen_original(sintetica)
@@ -509,14 +490,14 @@ class AplicacionHistogramasDesktop:
             ("Archivos de Imagen", "*.jpg *.jpeg *.png *.bmp *.webp"),
             ("JPEG", "*.jpg *.jpeg"),
             ("PNG", "*.png"),
-            ("Todos los archivos", "*.*")
+            ("Todos", "*.*")
         ]
         ruta = filedialog.askopenfilename(title="Seleccionar Imagen RGB", filetypes=tipos)
         if ruta:
             try:
                 self._cargar_imagen_desde_ruta(ruta)
             except Exception as e:
-                messagebox.showerror("Error al cargar imagen", f"No se pudo cargar la imagen:\n{e}")
+                messagebox.showerror("Error", f"No se pudo cargar la imagen:\n{e}")
 
     def _cargar_imagen_desde_ruta(self, ruta: str):
         img_rgb = utils.cargar_imagen_rgb(ruta)
@@ -525,27 +506,7 @@ class AplicacionHistogramasDesktop:
     def _establecer_imagen_original(self, img_rgb: np.ndarray):
         self.img_original_rgb = img_rgb
         alto, ancho = img_rgb.shape[:2]
-        total_px = ancho * alto
-        self.info_dimensiones.set(f"{ancho} × {alto} px ({total_px:,} px)")
-        self._ejecutar_procesamiento()
-
-    def _al_mover_slider(self, canal, valor):
-        v = int(valor)
-        if canal == 'r':
-            self.lbl_val_r.config(text=f"{v}%")
-        elif canal == 'g':
-            self.lbl_val_g.config(text=f"{v}%")
-        elif canal == 'b':
-            self.lbl_val_b.config(text=f"{v}%")
-        self._ejecutar_procesamiento()
-
-    def _accion_resetear_sliders(self):
-        self.redist_r.set(0)
-        self.redist_g.set(0)
-        self.redist_b.set(0)
-        self.lbl_val_r.config(text="0%")
-        self.lbl_val_g.config(text="0%")
-        self.lbl_val_b.config(text="0%")
+        self.info_dimensiones.set(f"{ancho} × {alto} px")
         self._ejecutar_procesamiento()
 
     def _ejecutar_procesamiento(self):
@@ -567,24 +528,24 @@ class AplicacionHistogramasDesktop:
         self.estadisticas = stats
         self.canales_espectros = espectros
 
-        # Actualizar labels de píxeles transferidos
-        self.info_tiempo_ms.set(f"{tiempo_ms:.2f} ms")
-        self.info_pixeles_r.set(f"{stats['exceso']['r']:,} px transferidos")
-        self.info_pixeles_g.set(f"{stats['exceso']['g']:,} px transferidos")
-        self.info_pixeles_b.set(f"{stats['exceso']['b']:,} px transferidos")
+        # Actualizar labels de latencia y píxeles transferidos
+        self.info_tiempo_ms.set(f"{tiempo_ms:.1f} ms")
+        self.info_px_r.set(f"{_formatear_miles(stats['exceso']['r'])} px transferidos")
+        self.info_px_g.set(f"{_formatear_miles(stats['exceso']['g'])} px transferidos")
+        self.info_px_b.set(f"{_formatear_miles(stats['exceso']['b'])} px transferidos")
 
-        # Refrescar visualizaciones
+        # Refrescar imágenes e histogramas
         self._actualizar_visores_imagenes()
-        self._actualizar_histogramas_en_pantalla()
-        self._actualizar_tab_espectros()
-        self._actualizar_tabla_metricas()
+        self._actualizar_graficos_histogramas()
 
     def _actualizar_visores_imagenes(self):
-        # Obtener dimensiones disponibles para escalar
-        max_w = max(200, self.lbl_canvas_orig.winfo_width())
-        max_h = max(180, self.lbl_canvas_orig.winfo_height())
-        if max_w <= 1 or max_h <= 1:
-            max_w, max_h = 480, 260
+        if self.img_original_rgb is None or self.img_modificada_rgb is None:
+            return
+
+        max_w = max(180, self.card_orig.winfo_width() - 16)
+        max_h = max(140, self.card_orig.winfo_height() - 20)
+        if max_w <= 10 or max_h <= 10:
+            max_w, max_h = 560, 220
 
         # Imagen original
         self.photo_orig, _, _ = utils.numpy_a_photoimage(self.img_original_rgb, max_w, max_h)
@@ -596,38 +557,8 @@ class AplicacionHistogramasDesktop:
         if self.photo_mod:
             self.lbl_canvas_mod.config(image=self.photo_mod)
 
-    def set_zoom_preset(self, preset: str):
-        """Ajusta el rango de inspección del histograma y actualiza visualmente los botones pill."""
-        self.zoom_rango.set(preset)
-        if hasattr(self, 'cmb_zoom'):
-            self.cmb_zoom.set(preset)
-        self._actualizar_estilo_pills_zoom()
-        self._actualizar_histogramas_en_pantalla()
-
-    def _actualizar_estilo_pills_zoom(self):
-        activo = self.zoom_rango.get()
-        for clave, btn in self.btn_pills_zoom.items():
-            if clave == activo:
-                btn.config(bg="#ffffff", fg="#2563eb", font=('Segoe UI', 8, 'bold'), relief="solid", bd=1)
-            else:
-                btn.config(bg="#f1f5f9", fg="#334155", font=('Segoe UI', 8), relief="flat", bd=0)
-
-    def set_escala(self, escala: str):
-        """Ajusta la escala del eje Y (lineal o logarítmica) y actualiza visualmente los botones pill."""
-        self.escala_y.set(escala)
-        self._actualizar_estilo_pills_escala()
-        self._actualizar_histogramas_en_pantalla()
-
-    def _actualizar_estilo_pills_escala(self):
-        activo = self.escala_y.get()
-        for clave, btn in self.btn_pills_escala.items():
-            if clave == activo:
-                btn.config(bg="#ffffff", fg="#2563eb", font=('Segoe UI', 8, 'bold'), relief="solid", bd=1)
-            else:
-                btn.config(bg="#f1f5f9", fg="#334155", font=('Segoe UI', 8), relief="flat", bd=0)
-
-    def _actualizar_histogramas_en_pantalla(self):
-        if self.histogramas is None:
+    def _actualizar_graficos_histogramas(self):
+        if self.histogramas is None or not hasattr(self, 'axes_canales'):
             return
 
         # Rango de bins según zoom
@@ -642,136 +573,155 @@ class AplicacionHistogramasDesktop:
             b_min, b_max = 0, 255
 
         es_log = (self.escala_y.get() == "log")
-        canales = ['r', 'g', 'b']
-        colores_hex = ['#dc2626', '#16a34a', '#2563eb']
-        nombres = ['Rojo', 'Verde', 'Azul']
+        canales_info = [
+            ('r', "Rojo", self.colores['red'], self.redist_r.get()),
+            ('g', "Verde", self.colores['green'], self.redist_g.get()),
+            ('b', "Azul", self.colores['blue'], self.redist_b.get())
+        ]
 
         bins_x = np.arange(256)
         bins_mask = (bins_x >= b_min) & (bins_x <= b_max)
         x_indices = bins_x[bins_mask]
 
-        for col_idx, k in enumerate(canales):
-            color = colores_hex[col_idx]
-            nombre = nombres[col_idx]
+        fmt_miles = FuncFormatter(lambda x, pos: f"{int(x/1000)}k" if x >= 1000 else f"{int(x)}")
 
-            # Fila 0: Original
-            ax_orig = self.axs[0, col_idx]
+        for canal, nombre, color, pct in canales_info:
+            ax_orig, ax_mod = self.axes_canales[canal]
+            canvas = self.canvases_canales[canal]
+
+            # 1. Gráfico Histograma Original (Arriba)
             ax_orig.clear()
-            h_orig = self.histogramas['orig'][k][bins_mask]
-            ax_orig.bar(x_indices, h_orig, color=color, width=1.0, alpha=0.85)
+            h_orig = self.histogramas['orig'][canal][bins_mask]
+            ax_orig.bar(x_indices, h_orig, color=color, width=1.0, alpha=0.90)
 
-            mu_o, sig_o = self.estadisticas['orig'][k]
-            ax_orig.set_title(f"{nombre} [ORIGINAL]  μ:{mu_o} | σ:{sig_o}",
-                              fontsize=8, fontweight='bold', color=color, pad=3)
+            mu_o, sig_o = self.estadisticas['orig'][canal]
+            ax_orig.set_title(f"{nombre} [ORIGINAL]", loc='left', fontsize=8, fontweight='bold', color=color, pad=3)
+            ax_orig.set_title(f"μ: {mu_o}  |  σ: {sig_o}", loc='right', fontsize=8, fontweight='bold', color=color, pad=3)
+
             ax_orig.set_xlim(b_min, b_max)
-            ax_orig.grid(True, linestyle=":", alpha=0.5)
+            ax_orig.set_xticks([t for t in [0, 50, 100, 150, 200, 255] if b_min <= t <= b_max])
+            ax_orig.grid(True, linestyle=":", alpha=0.45)
             ax_orig.tick_params(labelsize=7)
+            ax_orig.yaxis.set_major_formatter(fmt_miles)
             if es_log:
                 ax_orig.set_yscale('log')
 
-            # Fila 1: Modificado
-            ax_mod = self.axs[1, col_idx]
+            # Badge de Orig
+            ax_orig.text(0.96, 0.90, "■ Orig", transform=ax_orig.transAxes, ha='right', va='top',
+                         fontsize=6.5, color='#475569',
+                         bbox=dict(boxstyle='square,pad=0.2', facecolor='#ffffff', edgecolor='#cbd5e1', alpha=0.9))
+
+            # 2. Gráfico Histograma Modificado (Abajo)
             ax_mod.clear()
-            h_mod = self.histogramas['mod'][k][bins_mask]
-            ax_mod.bar(x_indices, h_mod, color=color, width=1.0, alpha=0.85)
+            h_mod = self.histogramas['mod'][canal][bins_mask]
+            ax_mod.bar(x_indices, h_mod, color=color, width=1.0, alpha=0.90)
 
-            # Línea guía de umbral si hay redistribución activa
-            umb = self.estadisticas['umbrales'][k]
-            if (k == 'r' and self.redist_r.get() > 0) or \
-               (k == 'g' and self.redist_g.get() > 0) or \
-               (k == 'b' and self.redist_b.get() > 0):
-                ax_mod.axhline(y=umb, color="#f59e0b", linestyle="--", linewidth=1.2, label="Umbral U")
+            # Línea guía de umbral U(f)
+            umb = self.estadisticas['umbrales'][canal]
+            if pct > 0:
+                ax_mod.axhline(y=umb, color="#f59e0b", linestyle="--", linewidth=1.2)
 
-            mu_m, sig_m = self.estadisticas['mod'][k]
-            ax_mod.set_title(f"{nombre} [MODIFICADO]  μ:{mu_m} | σ:{sig_m}",
-                             fontsize=8, fontweight='bold', color=color, pad=3)
+            mu_m, sig_m = self.estadisticas['mod'][canal]
+            ax_mod.set_title(f"{nombre} [MODIFICADO]", loc='left', fontsize=8, fontweight='bold', color=color, pad=3)
+            ax_mod.set_title(f"μ: {mu_m}  |  σ: {sig_m}", loc='right', fontsize=8, fontweight='bold', color=color, pad=3)
+
             ax_mod.set_xlim(b_min, b_max)
-            ax_mod.grid(True, linestyle=":", alpha=0.5)
+            ax_mod.set_xticks([t for t in [0, 50, 100, 150, 200, 255] if b_min <= t <= b_max])
+            ax_mod.grid(True, linestyle=":", alpha=0.45)
             ax_mod.tick_params(labelsize=7)
+            ax_mod.yaxis.set_major_formatter(fmt_miles)
             if es_log:
                 ax_mod.set_yscale('log')
 
-        self.fig_hist.tight_layout()
-        self.canvas_hist.draw_idle()
+            # Badge de Mod
+            ax_mod.text(0.96, 0.90, "■ Mod", transform=ax_mod.transAxes, ha='right', va='top',
+                        fontsize=6.5, color='#475569',
+                        bbox=dict(boxstyle='square,pad=0.2', facecolor='#ffffff', edgecolor='#cbd5e1', alpha=0.9))
 
-    def _actualizar_tab_espectros(self):
-        if self.canales_espectros is None:
-            return
+            canvas.draw_idle()
 
-        max_w = max(180, self.lbl_esp_r.winfo_width())
-        max_h = max(180, self.lbl_esp_r.winfo_height())
-        if max_w <= 1 or max_h <= 1:
-            max_w, max_h = 360, 320
-
-        # Espectro Rojo en color rojo
-        c_r = self.canales_espectros['mod']['r']
-        rgb_r = pdi.generar_vista_espectro_color(c_r, 'r')
-        self.photo_esp_r, _, _ = utils.numpy_a_photoimage(rgb_r, max_w, max_h)
-        if self.photo_esp_r:
-            self.lbl_esp_r.config(image=self.photo_esp_r)
-
-        # Espectro Verde en color verde
-        c_g = self.canales_espectros['mod']['g']
-        rgb_g = pdi.generar_vista_espectro_color(c_g, 'g')
-        self.photo_esp_g, _, _ = utils.numpy_a_photoimage(rgb_g, max_w, max_h)
-        if self.photo_esp_g:
-            self.lbl_esp_g.config(image=self.photo_esp_g)
-
-        # Espectro Azul en color azul
-        c_b = self.canales_espectros['mod']['b']
-        rgb_b = pdi.generar_vista_espectro_color(c_b, 'b')
-        self.photo_esp_b, _, _ = utils.numpy_a_photoimage(rgb_b, max_w, max_h)
-        if self.photo_esp_b:
-            self.lbl_esp_b.config(image=self.photo_esp_b)
-
-    def _actualizar_tabla_metricas(self):
+    # =========================================================================
+    # MODALES AUXILIARES (CONSERVACIÓN DE MASA Y ESPECTROS)
+    # =========================================================================
+    def _mostrar_modal_metricas(self):
         if self.estadisticas is None:
+            messagebox.showinfo("Aviso", "Primero cargue una imagen para ver las métricas.")
             return
 
-        for item in self.tree_metricas.get_children():
-            self.tree_metricas.delete(item)
+        modal = tk.Toplevel(self.root)
+        modal.title("Evaluación Cuantitativa y Conservación de Masa de Píxeles")
+        modal.geometry("860x420")
+        modal.configure(bg="#ffffff")
+        modal.grab_set()
+
+        frame = tk.Frame(modal, bg="#ffffff", padx=16, pady=14)
+        frame.pack(fill=tk.BOTH, expand=True)
+
+        tk.Label(frame, text="Teorema de Conservación de Masa de Píxeles (PHE)",
+                 font=('Segoe UI', 11, 'bold'), bg="#ffffff", fg=self.colores['text_main']).pack(anchor="w")
+
+        tk.Label(frame, text="Garantiza que la suma de frecuencias modificadas es idéntica a la masa original: ∑ H_mod = ∑ H_orig = M × N",
+                 font=('Segoe UI', 8, 'italic'), bg="#ffffff", fg=self.colores['text_muted']).pack(anchor="w", pady=(2, 10))
+
+        columnas = ("canal", "media_orig", "desv_orig", "media_mod", "desv_mod", "exceso", "pico_max", "masa_mod", "estado")
+        tree = ttk.Treeview(frame, columns=columnas, show="headings", height=5)
+
+        titulos = {
+            "canal": "Espectro",
+            "media_orig": "μ Orig",
+            "desv_orig": "σ Orig",
+            "media_mod": "μ Mod",
+            "desv_mod": "σ Mod",
+            "exceso": "Exceso Transferido (E)",
+            "pico_max": "Pico Máx",
+            "masa_mod": "Masa Total",
+            "estado": "Conservación"
+        }
+        for c, t in titulos.items():
+            tree.heading(c, text=t)
+            tree.column(c, anchor="center", width=95)
 
         total_px = self.img_original_rgb.shape[0] * self.img_original_rgb.shape[1]
-        canales = [
-            ("Rojo (R)", 'r'),
-            ("Verde (G)", 'g'),
-            ("Azul (B)", 'b')
-        ]
-
-        for nombre, k in canales:
+        for nom, k in [("Rojo (R)", 'r'), ("Verde (G)", 'g'), ("Azul (B)", 'b')]:
             mu_o, sig_o = self.estadisticas['orig'][k]
             mu_m, sig_m = self.estadisticas['mod'][k]
             exc = self.estadisticas['exceso'][k]
-            pico_max = int(np.max(self.histogramas['orig'][k]))
-            masa_mod = int(np.round(np.sum(self.histogramas['mod'][k])))
+            pico = int(np.max(self.histogramas['orig'][k]))
+            masa = int(np.round(np.sum(self.histogramas['mod'][k])))
+            estado = "✅ Exacta (0% error)" if masa == total_px else "❌ Discrepancia"
 
-            estado = "✅ Exacta (0% error)" if masa_mod == total_px else "❌ Discrepancia"
-
-            self.tree_metricas.insert("", tk.END, values=(
-                nombre,
-                f"{mu_o:.2f}",
-                f"{sig_o:.2f}",
-                f"{mu_m:.2f}",
-                f"{sig_m:.2f}",
-                f"{exc:,}",
-                f"{pico_max:,}",
-                f"{masa_mod:,}",
-                estado
+            tree.insert("", tk.END, values=(
+                nom, f"{mu_o:.2f}", f"{sig_o:.2f}", f"{mu_m:.2f}", f"{sig_m:.2f}",
+                _formatear_miles(exc), _formatear_miles(pico), _formatear_miles(masa), estado
             ))
+        tree.pack(fill=tk.X, pady=8)
+
+        # Fórmulas
+        box_f = tk.LabelFrame(frame, text=" Fórmulas Matemáticas Implementadas ",
+                              font=('Segoe UI', 8, 'bold'), bg="#ffffff", fg="#334155", padx=8, pady=6)
+        box_f.pack(fill=tk.BOTH, expand=True, pady=(6, 0))
+
+        formulas = (
+            "1. Media Uniforme Teórica:     H_bar = N_total / 256\n"
+            "2. Umbral Dinámico de Meseta:  U(f) = H_max - f × (H_max - H_bar)\n"
+            "3. Píxeles Excedentes:         E = ∑ max(H_orig[k] - U(f), 0)\n"
+            "4. Redistribución Homogénea:   H_mod[k] = min(H_orig[k], U(f)) + (E / 256)\n"
+            "5. Conservación de Masa:       ∑ H_mod[k] = (N_total - E) + 256 × (E / 256) = N_total"
+        )
+        tk.Label(box_f, text=formulas, font=('Consolas', 8), bg="#ffffff", fg="#0f172a", justify=tk.LEFT).pack(anchor="w")
 
     def _accion_guardar_resultado(self):
         if self.img_modificada_rgb is None:
             messagebox.showwarning("Aviso", "No hay ninguna imagen modificada para guardar.")
             return
 
-        dir_resultados = os.path.join(DIR_ACTUAL, "resultados")
-        os.makedirs(dir_resultados, exist_ok=True)
+        dir_res = os.path.join(DIR_ACTUAL, "resultados")
+        os.makedirs(dir_res, exist_ok=True)
         nombre_defecto = "resultado_contraste_rgb.png"
-        ruta_sugerida = os.path.join(dir_resultados, nombre_defecto)
 
         ruta = filedialog.asksaveasfilename(
             title="Guardar Imagen Procesada",
-            initialdir=dir_resultados,
+            initialdir=dir_res,
             initialfile=nombre_defecto,
             defaultextension=".png",
             filetypes=[("PNG", "*.png"), ("JPEG", "*.jpg *.jpeg"), ("Todos", "*.*")]
