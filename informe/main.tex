@@ -131,8 +131,8 @@ Las indicaciones establecidas para el desarrollo de la presente práctica de lab
 \begin{itemize}
     \item Computadora personal con arquitectura de 64 bits y procesador multinúcleo.
     \item Entorno de ejecución y programación científica en Python 3.10+ con soporte para cálculo tensorial vectorizado (\texttt{NumPy}) y manejo de matrices gráficas (\texttt{OpenCV}).
-    \item Librerías de renderizado científico y procesamiento de imágenes (\texttt{Matplotlib} y \texttt{Pillow}) embebidas en interfaz nativa de escritorio (\texttt{Tkinter}).
-    \item Arquitectura desacoplada en dos entornos complementarios: estación de laboratorio de escritorio en pantalla completa estructurada en 3 columnas espectrales y plataforma interactiva web desacoplada.
+    \item Entorno de renderizado y visualización gráfica científica de señales e histogramas mediante \texttt{Matplotlib} y \texttt{Pillow} embebidas en interfaz nativa de escritorio (\texttt{Tkinter}).
+    \item Arquitectura nativa de estación de trabajo en pantalla completa estructurada en 3 columnas cromáticas independientes sin duplicidad de controles, con acceso directo a memoria RAM para procesamiento en tiempo real.
     \item Distribución tipográfica técnica \LaTeX\ (MiKTeX / pdf\LaTeX) para la redacción científica del informe.
     \item Repositorios de literatura académica indexada en Procesamiento Digital de Imágenes y Visión por Computador.
 \end{itemize}
@@ -273,7 +273,7 @@ La Tabla~\ref{tab:equivalencias} documenta la correspondencia estricta entre la 
     \small
     \begin{tabularx}{\textwidth}{l >{\raggedright\arraybackslash}p{5.5cm} >{\raggedright\arraybackslash}X}
         \toprule
-        \textbf{Símbolo} & \textbf{Concepto Matemático} & \textbf{Variable en Código (Python / JS)} \\
+        \textbf{Símbolo} & \textbf{Concepto Matemático} & \textbf{Variable en Código (Python)} \\
         \midrule
         $I_c(x, y)$ & Matriz bidimensional del canal cromático & \texttt{canal}, \texttt{img\_rgb[:, :, c]} \\
         $N_{\text{total}}$ & Cantidad total de píxeles ($M \times N$) & \texttt{total\_px}, \texttt{canal.size} \\
@@ -410,7 +410,7 @@ Del análisis experimental se extraen las siguientes observaciones fundamentales
 \begin{figure}[H]
     \centering
     \includegraphics[width=0.98\textwidth]{imagenes/resultado_redistribucion.png}
-    \caption{\textbf{Anexo 1:} Evidencia real de la interfaz gráfica interactiva del sistema en ejecución (arquitectura unificada de pantalla completa estructurada en 3 columnas por espectro cromático sin duplicidad de controles): visores comparativos superiores (Original vs. Modificada con tiempo de ejecución en milisegundos), banco simultáneo de 6 histogramas discretos con rectángulos delimitados y badges de pico máximo, barra de herramientas con selector de zoom por rangos (Sombras, Medios, Luces, Todo), inspector interactivo de píxeles por nivel al pasar el cursor (hover), escala lineal/logarítmica y deslizador ergonómico integrado directamente debajo de cada canal cromático.}
+    \caption{\textbf{Anexo 1:} Evidencia real de la interfaz gráfica nativa de escritorio desarrollada en Python (\texttt{Tkinter} y \texttt{Matplotlib}) en ejecución (resolución $1552 \times 832$ px): arquitectura unificada de pantalla completa en 3 columnas por espectro cromático sin duplicidad de controles, visores comparativos superiores (Original vs. Modificada con tiempo de ejecución en milisegundos), banco simultáneo de 6 histogramas discretos con rectángulos delimitados y badges de pico máximo, barra de herramientas con selector de zoom por rangos (Sombras, Medios, Luces, Todo), inspector interactivo de píxeles por nivel al pasar el cursor (hover), escala lineal/logarítmica y deslizador ergonómico integrado directamente debajo de cada canal cromático.}
     \label{fig:anexo1_interfaz}
 \end{figure}
 
