@@ -112,7 +112,9 @@ def api_cargar_ejemplo():
         "success": True,
         "image_orig": array_a_base64_jpg(IMAGEN_ORIGINAL),
         "hist_orig": obtener_histogramas_rgb(img_rgb),
-        "stats_orig": stats_orig
+        "stats_orig": stats_orig,
+        "width": IMAGEN_ORIGINAL.shape[1],
+        "height": IMAGEN_ORIGINAL.shape[0]
     })
 
 
@@ -137,7 +139,9 @@ def api_subir_imagen():
         "success": True,
         "image_orig": array_a_base64_jpg(IMAGEN_ORIGINAL),
         "hist_orig": obtener_histogramas_rgb(img_rgb),
-        "stats_orig": stats_orig
+        "stats_orig": stats_orig,
+        "width": IMAGEN_ORIGINAL.shape[1],
+        "height": IMAGEN_ORIGINAL.shape[0]
     })
 
 

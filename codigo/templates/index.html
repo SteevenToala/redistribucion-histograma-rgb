@@ -1133,6 +1133,9 @@
               this.imgOriginal = data.image_orig;
               this.histOriginal = data.hist_orig;
               if (data.stats_orig) this.statsOrig = data.stats_orig;
+              if (data.width && data.height) {
+                this.resDimensions = `${data.width} × ${data.height} px`;
+              }
               this.solicitarProcesado();
               this.mostrarToast('Imagen cargada');
             }
