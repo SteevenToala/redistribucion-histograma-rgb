@@ -130,10 +130,11 @@ Las indicaciones establecidas para el desarrollo de la presente práctica de lab
 \textbf{Listado de equipos y materiales generales empleados en la guía práctica:}
 \begin{itemize}
     \item Computadora personal con arquitectura de 64 bits y procesador multinúcleo.
-    \item Entorno de ejecución Python 3.10+ con soporte para librerías de cálculo numérico vectorial (\texttt{NumPy}) y manejo de buffers gráficos (\texttt{OpenCV}).
-    \item Servidor web local \texttt{Flask} con frontend en \texttt{HTML5 Canvas} y \texttt{Alpine.js} para control interactivo en tiempo real a 60 FPS.
+    \item Entorno de ejecución y programación científica en Python 3.10+ con soporte para cálculo tensorial vectorizado (\texttt{NumPy}) y manejo de matrices gráficas (\texttt{OpenCV}).
+    \item Librerías de renderizado científico y procesamiento de imágenes (\texttt{Matplotlib} y \texttt{Pillow}) embebidas en interfaz nativa de escritorio (\texttt{Tkinter}).
+    \item Arquitectura desacoplada en dos entornos complementarios: estación de laboratorio de escritorio en pantalla completa estructurada en 3 columnas espectrales y plataforma interactiva web desacoplada.
     \item Distribución tipográfica técnica \LaTeX\ (MiKTeX / pdf\LaTeX) para la redacción científica del informe.
-    \item Conexión a Internet y repositorios de literatura académica en Procesamiento Digital de Imágenes.
+    \item Repositorios de literatura académica indexada en Procesamiento Digital de Imágenes y Visión por Computador.
 \end{itemize}
 
 \textbf{TAC (Tecnologías para el Aprendizaje y Conocimiento) empleados en la guía práctica:}
@@ -291,21 +292,26 @@ La Tabla~\ref{tab:equivalencias} documenta la correspondencia estricta entre la 
 \end{table}
 
 \subsubsection{5. Presentación de los Histogramas Modificados}
-En la interfaz de usuario, los histogramas modificados se representan como un banco de gráficos discretos renderizados en \texttt{HTML5 Canvas}. Cada gráfico cuenta con:
+En la interfaz gráfica de usuario, los histogramas modificados se representan mediante un banco de gráficos discretos estructurado en \textbf{3 columnas cromáticas independientes} (Rojo, Verde y Azul), ubicando cada control deslizante directamente bajo su espectro correspondiente para erradicar cualquier duplicidad visual:
 \begin{itemize}
-    \item Barras rectangulares discretas sin líneas continuas engañosas ni rellenos artificiales.
-    \item Graduación cartesiana numérica exacta en el eje $X$ (0 a 255) y en el eje $Y$ (con notación compacta en miles `k`).
-    \item Línea guía punteada en color ámbar que marca en tiempo real la posición del umbral de meseta $U(f)$.
-    \item Selector de escala lineal y logarítmica ($\log(1 + y)$) para inspeccionar valles con frecuencias bajas.
-    \item Herramientas interactivas de zoom por arrastre de ratón, zoom por rueda y botones predefinidos (Sombras: 0--85, Medios: 85--170, Luces: 170--255, y Todo: 0--255).
+    \item \textbf{Columnas Rectangulares Nítidas y Discretas:} Se configuran las barras con ancho relativo acotado ($0.82$ en vista global y $0.72$ con zoom) y delimitación de bordes oscuros en bajo relieve (\texttt{linewidth}=0.5), asegurando que cada uno de los 256 niveles se visualice como un rectángulo individual inequívoco y no como una silueta continua artificial.
+    \item \textbf{Insignia Indicadora de Pico Máximo:} Cada uno de los 6 gráficos incorpora una etiqueta flotante superior que reporta el valor absoluto del pico máximo ($H_{\max}$ en píxeles), permitiendo discernir con precisión métrica la altura máxima de cada distribución.
+    \item \textbf{Escala Vertical Adaptativa ($Y$):} Se establece un margen superior del $16\%$ (\textit{headroom}) para evitar que las barras colisionen con el límite superior del plano, empleando un formateador numérico inteligente con cifras enteras reales para rangos moderados (evitando truncamientos toscos).
+    \item \textbf{Inspector Dinámico en Tiempo Real (Hover):} Al desplazar el cursor sobre cualquier barra de los histogramas, el sistema reporta instantáneamente en la barra central el nivel exacto de intensidad lumínica $k \in [0, 255]$, la frecuencia original $H_{\text{orig}}[k]$, la frecuencia modificada $H_{\text{mod}}[k]$, el porcentaje sobre la masa total de la imagen y la variación neta de píxeles transferidos.
+    \item \textbf{Línea de Umbral Dinámico de Meseta:} Se traza en tiempo real una línea discontinua en color ámbar sobre los histogramas modificados que demarca la cota de corte $U(f)$, ilustrando visualmente la transferencia de masa excedente hacia los niveles inferiores.
+    \item \textbf{Herramientas de Zoom de Inspección:} Botones segmentados preconfigurados para inspeccionar rangos críticos: Sombras ($0$--$85$), Medios ($85$--$170$), Luces ($170$--$255$) y Todo ($0$--$255$), con selector de escala lineal/logarítmica y botón de restauración inmediata.
+    \item \textbf{Módulo de Consulta Tabular Completa (0--255):} Se integra una ventana modal de consulta interactiva con buscador en vivo, permitiendo auditar la cantidad exacta de píxeles en los 256 niveles de intensidad para los tres canales cromáticos.
 \end{itemize}
 
 \subsubsection{6. Presentación de la Imagen Modificada}
-Los tres canales procesados ($c_{\text{out}, R}$, $c_{\text{out}, G}$, $c_{\text{out}, B}$) se fusionan tridimensionalmente mediante apilamiento en profundidad:
+Los tres canales procesados ($c_{\text{out}, R}$, $c_{\text{out}, G}$, $c_{\text{out}, B}$) se fusionan tridimensionalmente mediante apilamiento matricial en profundidad:
 \begin{equation}
     \mathbf{I}_{\text{out, RGB}} = \text{np.dstack}\big([c_{\text{out}, R},\, c_{\text{out}, G},\, c_{\text{out}, B}]\big)
 \end{equation}
-La imagen resultante se convierte al espacio BGR y se codifica en Base64 en memoria para ser transmitida al cliente web vía JSON, mostrándose lado a lado junto a la imagen original en el visor comparativo superior a 60 FPS, con opción de almacenamiento persistente del resultado mediante el botón \textit{Guardar en Resultados}.
+La imagen resultante se proyecta en el visor comparativo superior en tiempo real, exhibida lado a lado junto a la imagen original con preservación estricta de la relación de aspecto y badge de latencia computacional en milisegundos. Asimismo, se proporciona la funcionalidad de exportación persistente de la matriz resultante en formato de alta fidelidad sin pérdidas mediante el botón \textit{Guardar en Resultados}.
+
+\subsubsection{7. Presentación del Informe Técnico en Formato APE}
+En cumplimiento estricto del séptimo requerimiento de la guía práctica, se elaboró el presente informe técnico en formato oficial APE 1 de la Facultad de Ingeniería en Sistemas, Electrónica e Industrial (FISEI) de la Universidad Técnica de Ambato. En este documento se exponen los objetivos, la formulación matemática analítica rigurosa, la justificación de conservación de masa de píxeles, la evaluación cuantitativa experimental y las evidencias visuales auténticas obtenidas en el laboratorio.
 
 % =========================================================
 % RESULTADOS OBTENIDOS
@@ -404,7 +410,7 @@ Del análisis experimental se extraen las siguientes observaciones fundamentales
 \begin{figure}[H]
     \centering
     \includegraphics[width=0.98\textwidth]{imagenes/resultado_redistribucion.png}
-    \caption{\textbf{Anexo 1:} Evidencia real de la interfaz gráfica interactiva del sistema en ejecución (diseño de pantalla única 100vh): visores comparativos superior e inferior (Original vs. Modificada), banco simultáneo de 6 histogramas discretos organizados en 3 columnas cromáticas (originales fijos arriba y modificados en tiempo real abajo con líneas de umbral dinámico), selectores de zoom cartesiano, escala logarítmica y deslizador ergonómico por canal reportando en vivo la masa exacta de píxeles transferidos.}
+    \caption{\textbf{Anexo 1:} Evidencia real de la interfaz gráfica interactiva del sistema en ejecución (arquitectura unificada de pantalla completa estructurada en 3 columnas por espectro cromático sin duplicidad de controles): visores comparativos superiores (Original vs. Modificada con tiempo de ejecución en milisegundos), banco simultáneo de 6 histogramas discretos con rectángulos delimitados y badges de pico máximo, barra de herramientas con selector de zoom por rangos (Sombras, Medios, Luces, Todo), inspector interactivo de píxeles por nivel al pasar el cursor (hover), escala lineal/logarítmica y deslizador ergonómico integrado directamente debajo de cada canal cromático.}
     \label{fig:anexo1_interfaz}
 \end{figure}
 
